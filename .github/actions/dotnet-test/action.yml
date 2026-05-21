@@ -1,11 +1,16 @@
 name: dotnet test
 description: >
-  Runs `dotnet test --no-build` against the given solution. Assumes the
+  Runs `dotnet test --no-build` against the given solution and collects
+  code coverage via Coverlet's data collector
+  (`--collect:"XPlat Code Coverage"`). Coverage output is written to
+  `./TestResults/<guid>/coverage.cobertura.xml` so downstream report
+  and threshold steps can find it deterministically. Assumes the
   dotnet-build action ran earlier in the job; the `--no-build` flag
   enforces that separation so a missing build step fails loudly here
   instead of being silently re-done. Split from build so the workflow
   exposes two distinct failure surfaces (compile errors vs test
-  failures).
+  failures). Consumer test projects must reference the
+  `coverlet.collector` NuGet package for the collector to activate.
 
 inputs:
   solution-path:
