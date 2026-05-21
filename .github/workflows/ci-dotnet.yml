@@ -93,3 +93,16 @@ jobs:
         uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-build@master
         with:
           solution-path: ${{ inputs.solution-path }}
+
+      # --- Test ----------------------------------------------------
+      - name: Test (local)
+        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
+        uses: ./.github/actions/dotnet-test
+        with:
+          solution-path: ${{ inputs.solution-path }}
+
+      - name: Test (consumer)
+        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
+        uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-test@master
+        with:
+          solution-path: ${{ inputs.solution-path }}

@@ -1,0 +1,22 @@
+name: dotnet test
+description: >
+  Runs `dotnet test --no-build` against the given solution. Assumes the
+  dotnet-build action ran earlier in the job; the `--no-build` flag
+  enforces that separation so a missing build step fails loudly here
+  instead of being silently re-done. Split from build so the workflow
+  exposes two distinct failure surfaces (compile errors vs test
+  failures).
+
+inputs:
+  solution-path:
+    description: Path to the .sln/.slnx whose tests to run.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Test
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Invoke-DotnetTest.ps1" `
+          -SolutionPath '${{ inputs.solution-path }}'
