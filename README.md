@@ -24,8 +24,9 @@ first release lands.
 
 ### ci-dotnet.yml
 Reusable workflow (`on: workflow_call`) that performs the .NET CI
-preflight, restore, build, and test. Coverage collection and the
-threshold gate are added in subsequent plan steps.
+preflight, restore, build, test, and code coverage collection. The
+human-readable coverage report and the threshold gate are added in
+subsequent plan steps.
 
 **Inputs:**
 - `solution-path` (string, required) - path to the `.sln`/`.slnx` to
@@ -59,10 +60,13 @@ consumer's workspace is required.
 5. [`dotnet-build`](.github/actions/dotnet-build/) - `dotnet build
    <solution-path> --no-restore`.
 6. [`dotnet-test`](.github/actions/dotnet-test/) - `dotnet test
-   <solution-path> --no-build`. Separated from build so the workflow
-   exposes two distinct failure surfaces (compile errors vs test
-   failures), and so a future "build-only" mode can be added by
+   <solution-path> --no-build --collect:"XPlat Code Coverage"
+   --results-directory ./TestResults`. Separated from build so the
+   workflow exposes two distinct failure surfaces (compile errors vs
+   test failures), and so a future "build-only" mode can be added by
    gating this step on an input without disturbing the build pipeline.
+   Coverage output lands at `TestResults/<guid>/coverage.cobertura.xml`
+   for the report and threshold steps that follow.
 
 Cleanup runs **before** the SDK assertion so that a prior run's
 artifacts do not survive into a job that aborts at the assertion;
@@ -82,6 +86,16 @@ Exactly one of each pair runs per job. This mirrors
 `Infrastructure-GitHubRunners` and baked into the runner image.
 Workflow consumers do not install it ad hoc.
 
+**Coverage contract:** the test step activates Coverlet's
+`XPlat Code Coverage` data collector, which requires each consumer
+test project to reference the `coverlet.collector` NuGet package
+(currently `6.0.4` in the self-test sample). Without that
+PackageReference, `dotnet test` still passes but no
+`coverage.cobertura.xml` is produced and the downstream report and
+threshold steps fail. Output path is
+`TestResults/<guid>/coverage.cobertura.xml`, relative to the working
+directory the test step runs in.
+
 ## Composite actions
 The reusable workflow above is the recommended entry point, but each
 composite action is also directly consumable for repos that want
@@ -94,7 +108,8 @@ finer control or atomic per-action SHA pinning:
 - [`dotnet-build`](.github/actions/dotnet-build/) - input:
   `solution-path`
 - [`dotnet-test`](.github/actions/dotnet-test/) - input:
-  `solution-path`
+  `solution-path`; collects Coverlet coverage to
+  `TestResults/<guid>/coverage.cobertura.xml`
 
 ## Self-test sample
 `tests/sample/` is a minimal .NET solution (one class library plus one
