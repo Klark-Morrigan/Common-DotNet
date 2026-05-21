@@ -24,7 +24,7 @@ first release lands.
 
 ### ci-dotnet.yml
 Reusable workflow (`on: workflow_call`) that performs the .NET CI
-preflight, restore, and build. Test execution, coverage, and the
+preflight, restore, build, and test. Coverage collection and the
 threshold gate are added in subsequent plan steps.
 
 **Inputs:**
@@ -58,6 +58,11 @@ consumer's workspace is required.
    restore <solution-path>`.
 5. [`dotnet-build`](.github/actions/dotnet-build/) - `dotnet build
    <solution-path> --no-restore`.
+6. [`dotnet-test`](.github/actions/dotnet-test/) - `dotnet test
+   <solution-path> --no-build`. Separated from build so the workflow
+   exposes two distinct failure surfaces (compile errors vs test
+   failures), and so a future "build-only" mode can be added by
+   gating this step on an input without disturbing the build pipeline.
 
 Cleanup runs **before** the SDK assertion so that a prior run's
 artifacts do not survive into a job that aborts at the assertion;
@@ -87,6 +92,8 @@ finer control or atomic per-action SHA pinning:
 - [`dotnet-restore`](.github/actions/dotnet-restore/) - input:
   `solution-path`
 - [`dotnet-build`](.github/actions/dotnet-build/) - input:
+  `solution-path`
+- [`dotnet-test`](.github/actions/dotnet-test/) - input:
   `solution-path`
 
 ## Self-test sample
