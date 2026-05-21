@@ -1,0 +1,20 @@
+name: dotnet build
+description: >
+  Builds the given solution without re-running restore. Assumes the
+  dotnet-restore action ran earlier in the job; the `--no-restore`
+  flag enforces that separation so a missing restore step fails
+  loudly here instead of being silently re-done.
+
+inputs:
+  solution-path:
+    description: Path to the .sln/.slnx to build.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Build
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Invoke-DotnetBuild.ps1" `
+          -SolutionPath '${{ inputs.solution-path }}'

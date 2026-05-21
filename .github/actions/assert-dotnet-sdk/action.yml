@@ -1,0 +1,15 @@
+name: Assert .NET SDK is present
+description: >
+  Preflight that fails fast with an actionable message if the .NET SDK
+  is not on PATH. Without this, a missing SDK surfaces as a confusing
+  `dotnet restore` error several steps later. The SDK is provisioned
+  by Infrastructure-GitHubRunners; the error message points there so
+  the fix lands in the right repo, not ad hoc on the runner host.
+
+runs:
+  using: composite
+  steps:
+    - name: Assert .NET SDK
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Assert-DotnetSdk.ps1"
