@@ -1,0 +1,95 @@
+name: CI (.NET)
+
+# Reusable .NET CI workflow for SynergyOps repositories.
+#
+# This YAML orchestrates the job. Each step delegates to a dedicated
+# composite action under `.github/actions/`, so per-step logic stays
+# testable in isolation and the workflow stays readable. Composite
+# actions colocate their PowerShell script next to action.yml and
+# invoke it via ${{ github.action_path }}, which means the action body
+# and its script ship together at the same SHA.
+#
+# Consumers invoke this workflow via `uses:` pinned to a commit SHA.
+# Coverage collection, reporting, and the threshold gate land in
+# subsequent plan steps (see docs/dev/implementation/).
+#
+# Why each step is duplicated with `if:` guards:
+#   Local action references (`uses: ./.github/actions/<name>`) only
+#   resolve when this repo's checkout is the job's checked-out repo,
+#   which is true only on PRs to DotNet-Common itself. When a
+#   consumer repo invokes this workflow via `workflow_call`, those
+#   local paths do not exist in the consumer's checkout, so each step
+#   has a sibling that uses the remote action reference instead.
+#   Exactly one of each pair runs per job. This pattern mirrors
+#   Infrastructure-Common's reusable workflows.
+
+on:
+  workflow_call:
+    inputs:
+      solution-path:
+        description: >-
+          Path to the .sln (or .slnx) file to restore and build,
+          relative to the consumer repo root.
+        required: true
+        type: string
+      runs-on-label:
+        description: >-
+          Extra runner label combined with `self-hosted` to target a
+          specific runner pool. Defaults to `self-hosted` which makes
+          the effective selector `[self-hosted, self-hosted]` (a no-op
+          second label) so any self-hosted runner is eligible.
+        required: false
+        type: string
+        default: self-hosted
+
+jobs:
+  build:
+    name: Restore and build
+    runs-on: [self-hosted, "${{ inputs.runs-on-label }}"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # --- Clean workspace artifacts -------------------------------
+      - name: Clean workspace artifacts (local)
+        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
+        uses: ./.github/actions/clear-workspace-artifacts
+
+      - name: Clean workspace artifacts (consumer)
+        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
+        uses: VitaliiAndreev/DotNet-Common/.github/actions/clear-workspace-artifacts@master
+
+      # --- Assert .NET SDK -----------------------------------------
+      - name: Assert .NET SDK (local)
+        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
+        uses: ./.github/actions/assert-dotnet-sdk
+
+      - name: Assert .NET SDK (consumer)
+        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
+        uses: VitaliiAndreev/DotNet-Common/.github/actions/assert-dotnet-sdk@master
+
+      # --- Restore -------------------------------------------------
+      - name: Restore (local)
+        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
+        uses: ./.github/actions/dotnet-restore
+        with:
+          solution-path: ${{ inputs.solution-path }}
+
+      - name: Restore (consumer)
+        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
+        uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-restore@master
+        with:
+          solution-path: ${{ inputs.solution-path }}
+
+      # --- Build ---------------------------------------------------
+      - name: Build (local)
+        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
+        uses: ./.github/actions/dotnet-build
+        with:
+          solution-path: ${{ inputs.solution-path }}
+
+      - name: Build (consumer)
+        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
+        uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-build@master
+        with:
+          solution-path: ${{ inputs.solution-path }}
