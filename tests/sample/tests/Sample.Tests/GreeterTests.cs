@@ -7,4 +7,10 @@ public class GreeterTests
     {
         Assert.Equal("Hello, Alice!", Greeter.Greet("Alice"));
     }
+
+    [Fact]
+    public void GreetEmptyNameFallsBackToWorldGreeting()
+    {
+        Assert.Equal("Hello, world!", Greeter.Greet(string.Empty));
+    }
 }
