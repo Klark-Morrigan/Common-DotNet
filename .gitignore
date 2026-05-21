@@ -1,0 +1,59 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# Test and coverage output
+[Tt]est[Rr]esult*/
+[Cc]overage[Rr]eport/
+coverage.*.xml
+coverage.cobertura.xml
+*.coverage
+*.coveragexml
+*.trx
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!packages.config
+
+# User-specific files
+*.user
+*.suo
+*.userprefs
+*.rsuser
+*.userosscache
+*.sln.docstates
+
+# Rider / ReSharper
+.idea/
+*.DotSettings.user
+_ReSharper*/
+
+# Visual Studio
+.vs/
+*.VC.db
+*.VC.opendb
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tooling
+*.pdb
+*.dll.config
+*.exe.config
+
+# Local environment overrides
+*.local.*
+.env
+.env.*
+!.env.example
