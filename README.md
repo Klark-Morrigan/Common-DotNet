@@ -10,6 +10,7 @@ MSBuild props, analyzer rulesets, base test SDKs) that every SynergyOps
 - [Status](#status)
 - [Workflows](#workflows)
   - [ci-dotnet.yml](#ci-dotnetyml)
+- [Artifacts](#artifacts)
 - [Composite actions](#composite-actions)
 - [Self-test sample](#self-test-sample)
 - [Implementation docs](#implementation-docs)
@@ -24,9 +25,10 @@ first release lands.
 
 ### ci-dotnet.yml
 Reusable workflow (`on: workflow_call`) that performs the .NET CI
-preflight, restore, build, test, and code coverage collection. The
-human-readable coverage report and the threshold gate are added in
-subsequent plan steps.
+preflight, restore, build, test, code coverage collection, and
+human-readable coverage reporting (with the report uploaded as a
+build artifact). The coverage threshold gate is added in a subsequent
+plan step.
 
 **Inputs:**
 - `solution-path` (string, required) - path to the `.sln`/`.slnx` to
@@ -55,11 +57,16 @@ consumer's workspace is required.
    `dotnet --version` and fails fast with a message pointing at
    `Infrastructure-GitHubRunners` if the SDK is missing, instead of
    letting `dotnet restore` produce a confusing error mid-job.
-4. [`dotnet-restore`](.github/actions/dotnet-restore/) - `dotnet
+4. [`assert-reportgenerator`](.github/actions/assert-reportgenerator/) -
+   verifies the ReportGenerator global tool is on PATH and fails fast
+   with the same `Infrastructure-GitHubRunners` guidance if missing.
+   Grouped with the SDK assertion so every required tool is checked
+   before any long-running step.
+5. [`dotnet-restore`](.github/actions/dotnet-restore/) - `dotnet
    restore <solution-path>`.
-5. [`dotnet-build`](.github/actions/dotnet-build/) - `dotnet build
+6. [`dotnet-build`](.github/actions/dotnet-build/) - `dotnet build
    <solution-path> --no-restore`.
-6. [`dotnet-test`](.github/actions/dotnet-test/) - `dotnet test
+7. [`dotnet-test`](.github/actions/dotnet-test/) - `dotnet test
    <solution-path> --no-build --collect:"XPlat Code Coverage"
    --results-directory ./TestResults`. Separated from build so the
    workflow exposes two distinct failure surfaces (compile errors vs
@@ -67,6 +74,16 @@ consumer's workspace is required.
    gating this step on an input without disturbing the build pipeline.
    Coverage output lands at `TestResults/<guid>/coverage.cobertura.xml`
    for the report and threshold steps that follow.
+8. [`dotnet-coverage-report`](.github/actions/dotnet-coverage-report/) -
+   runs ReportGenerator over the Cobertura output from the test step
+   and writes `CoverageReport/{index.html, Summary.txt, Cobertura.xml}`.
+   The merged `Cobertura.xml` is the canonical input the threshold
+   gate (Step 6) will read, so the gate does not need to glob
+   `TestResults/`.
+9. `actions/upload-artifact@v4` - uploads the entire `CoverageReport/`
+   directory as a single artifact named `coverage-report`. Runs with
+   `if: always()` so reviewers can still inspect partial coverage if
+   the test step failed.
 
 Cleanup runs **before** the SDK assertion so that a prior run's
 artifacts do not survive into a job that aborts at the assertion;
@@ -82,9 +99,10 @@ step has a sibling using the remote reference
 Exactly one of each pair runs per job. This mirrors
 `Infrastructure-Common`'s reusable workflow pattern.
 
-**Runner requirements:** the .NET SDK is provisioned by
-`Infrastructure-GitHubRunners` and baked into the runner image.
-Workflow consumers do not install it ad hoc.
+**Runner requirements:** the .NET SDK *and* the ReportGenerator
+global tool (`dotnet tool install -g dotnet-reportgenerator-globaltool`)
+are provisioned by `Infrastructure-GitHubRunners` and baked into the
+runner image. Workflow consumers do not install either ad hoc.
 
 **Coverage contract:** the test step activates Coverlet's
 `XPlat Code Coverage` data collector, which requires each consumer
@@ -96,6 +114,22 @@ threshold steps fail. Output path is
 `TestResults/<guid>/coverage.cobertura.xml`, relative to the working
 directory the test step runs in.
 
+## Artifacts
+The workflow uploads one artifact per job run:
+
+- `coverage-report` - the entire `CoverageReport/` directory, which
+  contains:
+  - `index.html` - browsable HTML report.
+  - `Summary.txt` - plain-text summary; includes the `Line coverage:`
+    line the threshold gate (Step 6) parses.
+  - `Cobertura.xml` - merged Cobertura across all input report files;
+    the canonical input for the threshold gate.
+  - Supporting CSS/JS/SVG/per-class HTML pages for the HTML report.
+
+The upload step runs with `if: always()`, so the artifact is produced
+even when the test step fails - reviewers can still inspect partial
+coverage for the assemblies whose tests did run.
+
 ## Composite actions
 The reusable workflow above is the recommended entry point, but each
 composite action is also directly consumable for repos that want
@@ -103,6 +137,7 @@ finer control or atomic per-action SHA pinning:
 
 - [`clear-workspace-artifacts`](.github/actions/clear-workspace-artifacts/)
 - [`assert-dotnet-sdk`](.github/actions/assert-dotnet-sdk/)
+- [`assert-reportgenerator`](.github/actions/assert-reportgenerator/)
 - [`dotnet-restore`](.github/actions/dotnet-restore/) - input:
   `solution-path`
 - [`dotnet-build`](.github/actions/dotnet-build/) - input:
@@ -110,6 +145,10 @@ finer control or atomic per-action SHA pinning:
 - [`dotnet-test`](.github/actions/dotnet-test/) - input:
   `solution-path`; collects Coverlet coverage to
   `TestResults/<guid>/coverage.cobertura.xml`
+- [`dotnet-coverage-report`](.github/actions/dotnet-coverage-report/) -
+  optional inputs: `reports-glob` (default
+  `TestResults/**/coverage.cobertura.xml`), `target-dir` (default
+  `CoverageReport`)
 
 ## Self-test sample
 `tests/sample/` is a minimal .NET solution (one class library plus one
