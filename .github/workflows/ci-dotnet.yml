@@ -120,3 +120,32 @@ jobs:
         uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-test@master
         with:
           solution-path: ${{ inputs.solution-path }}
+
+      # --- Coverage report -----------------------------------------
+      # Turns the raw Cobertura output from `dotnet-test` into a
+      # browsable HTML report plus a text summary and merged
+      # Cobertura. The merged Cobertura is the canonical input the
+      # threshold gate (Step 6) will read.
+      - name: Coverage report (local)
+        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
+        uses: ./.github/actions/dotnet-coverage-report
+
+      - name: Coverage report (consumer)
+        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
+        uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-coverage-report@master
+
+      # --- Upload coverage artifact --------------------------------
+      # Single artifact carrying HTML, Summary.txt, and the merged
+      # Cobertura. Uploaded unconditionally on job completion (even on
+      # test failure) so reviewers can still inspect partial coverage
+      # for the assemblies whose tests did run. Pinned to the v4 major
+      # tag matching the existing `actions/checkout@v5` policy in this
+      # workflow; consumers of `ci-dotnet.yml` pin by SHA at the outer
+      # `uses:` per the supply-chain posture documented in README.md.
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: CoverageReport/
+          if-no-files-found: error
