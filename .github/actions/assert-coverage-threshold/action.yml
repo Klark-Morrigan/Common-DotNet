@@ -1,0 +1,36 @@
+name: assert coverage threshold
+description: >
+  Enforces a minimum line-coverage percentage by reading the merged
+  Cobertura file produced by the upstream `dotnet-coverage-report`
+  action. Fails the job with a diagnostic naming both the observed
+  value and the configured threshold when coverage drops below the
+  bar. Without an enforced gate, coverage drifts down silently over
+  time. The merged `Cobertura.xml` is preferred over parsing
+  `Summary.txt` because it is the canonical machine-readable artifact
+  the report action commits to producing.
+
+inputs:
+  coverage-threshold:
+    description: >
+      Minimum acceptable line coverage as a percentage (0-100). Default
+      90 mirrors the SynergyOps house standard; consumers override via
+      the workflow input when their codebase justifies a different bar.
+    required: false
+    default: '90'
+  cobertura-path:
+    description: >
+      Path to the merged Cobertura XML to read. Defaults to
+      `CoverageReport/Cobertura.xml`, the path the
+      `dotnet-coverage-report` action writes to.
+    required: false
+    default: CoverageReport/Cobertura.xml
+
+runs:
+  using: composite
+  steps:
+    - name: Assert coverage threshold
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Assert-CoverageThreshold.ps1" `
+          -CoberturaPath '${{ inputs.cobertura-path }}' `
+          -Threshold ([double]'${{ inputs.coverage-threshold }}')

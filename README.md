@@ -25,10 +25,10 @@ first release lands.
 
 ### ci-dotnet.yml
 Reusable workflow (`on: workflow_call`) that performs the .NET CI
-preflight, restore, build, test, code coverage collection, and
+preflight, restore, build, test, code coverage collection,
 human-readable coverage reporting (with the report uploaded as a
-build artifact). The coverage threshold gate is added in a subsequent
-plan step.
+build artifact), and a coverage threshold gate that fails the job
+when line coverage drops below a consumer-configurable bar.
 
 **Inputs:**
 - `solution-path` (string, required) - path to the `.sln`/`.slnx` to
@@ -36,6 +36,11 @@ plan step.
 - `runs-on-label` (string, optional, default `self-hosted`) - extra
   runner label combined with `self-hosted` to target a specific
   self-hosted runner pool.
+- `coverage-threshold` (number, optional, default `90`) - minimum
+  acceptable line coverage as a percentage (0-100). The threshold
+  gate step fails the job when the merged Cobertura report's
+  `line-rate` falls below this value. Values above 100 are silently
+  capped at 100; negative values are rejected.
 
 **Orchestration model:** the workflow YAML is an orchestrator. Each
 step delegates to a dedicated composite action under
@@ -78,12 +83,19 @@ consumer's workspace is required.
    runs ReportGenerator over the Cobertura output from the test step
    and writes `CoverageReport/{index.html, Summary.txt, Cobertura.xml}`.
    The merged `Cobertura.xml` is the canonical input the threshold
-   gate (Step 6) will read, so the gate does not need to glob
-   `TestResults/`.
-9. `actions/upload-artifact@v4` - uploads the entire `CoverageReport/`
-   directory as a single artifact named `coverage-report`. Runs with
-   `if: always()` so reviewers can still inspect partial coverage if
-   the test step failed.
+   gate reads, so the gate does not need to glob `TestResults/`.
+9. [`assert-coverage-threshold`](.github/actions/assert-coverage-threshold/) -
+   reads `line-rate` from `CoverageReport/Cobertura.xml` and fails
+   the job with a diagnostic naming both the observed value and the
+   configured threshold when coverage drops below `coverage-threshold`.
+   Placed before the artifact upload so the gate is the final word on
+   the build; the upload step's `if: always()` guarantees reviewers
+   still get the report when the gate fails - that is exactly when
+   they need it most.
+10. `actions/upload-artifact@v4` - uploads the entire `CoverageReport/`
+    directory as a single artifact named `coverage-report`. Runs with
+    `if: always()` so reviewers can still inspect partial coverage if
+    the test step or the threshold gate failed.
 
 Cleanup runs **before** the SDK assertion so that a prior run's
 artifacts do not survive into a job that aborts at the assertion;
@@ -149,6 +161,10 @@ finer control or atomic per-action SHA pinning:
   optional inputs: `reports-glob` (default
   `TestResults/**/coverage.cobertura.xml`), `target-dir` (default
   `CoverageReport`)
+- [`assert-coverage-threshold`](.github/actions/assert-coverage-threshold/) -
+  optional inputs: `coverage-threshold` (default `90`),
+  `cobertura-path` (default `CoverageReport/Cobertura.xml`); fails
+  the step when observed line coverage is below the threshold
 
 ## Self-test sample
 `tests/sample/` is a minimal .NET solution (one class library plus one

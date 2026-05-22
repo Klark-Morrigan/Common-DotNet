@@ -41,6 +41,15 @@ on:
         required: false
         type: string
         default: self-hosted
+      coverage-threshold:
+        description: >-
+          Minimum acceptable line coverage as a percentage (0-100).
+          The job fails if the merged Cobertura report's line-rate
+          falls below this value. Default 90 mirrors the SynergyOps
+          house standard; raise or lower per-consumer when justified.
+        required: false
+        type: number
+        default: 90
 
 jobs:
   build:
@@ -133,6 +142,25 @@ jobs:
       - name: Coverage report (consumer)
         if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
         uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-coverage-report@master
+
+      # --- Coverage threshold gate ---------------------------------
+      # Reads the merged Cobertura emitted by `dotnet-coverage-report`
+      # and fails the job when line coverage drops below the
+      # configured threshold. Placed before the artifact upload so the
+      # gate is the final word on the build, but the upload step uses
+      # `if: always()` so reviewers still get the report when the gate
+      # fails - that is exactly when they need it most.
+      - name: Coverage threshold gate (local)
+        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
+        uses: ./.github/actions/assert-coverage-threshold
+        with:
+          coverage-threshold: ${{ inputs.coverage-threshold }}
+
+      - name: Coverage threshold gate (consumer)
+        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
+        uses: VitaliiAndreev/DotNet-Common/.github/actions/assert-coverage-threshold@master
+        with:
+          coverage-threshold: ${{ inputs.coverage-threshold }}
 
       # --- Upload coverage artifact --------------------------------
       # Single artifact carrying HTML, Summary.txt, and the merged
