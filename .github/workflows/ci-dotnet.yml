@@ -68,6 +68,20 @@ jobs:
         if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
         uses: VitaliiAndreev/DotNet-Common/.github/actions/assert-dotnet-sdk@master
 
+      # --- Assert ReportGenerator ----------------------------------
+      # Lives next to the SDK assertion so every required tool is
+      # checked before any long-running step. Coverage reporting is
+      # the first consumer of this tool (later in the job), but
+      # failing fast here keeps the diagnostic adjacent to the other
+      # runner-image guidance.
+      - name: Assert ReportGenerator (local)
+        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
+        uses: ./.github/actions/assert-reportgenerator
+
+      - name: Assert ReportGenerator (consumer)
+        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
+        uses: VitaliiAndreev/DotNet-Common/.github/actions/assert-reportgenerator@master
+
       # --- Restore -------------------------------------------------
       - name: Restore (local)
         if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
