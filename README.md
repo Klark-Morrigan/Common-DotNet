@@ -50,30 +50,42 @@ step delegates to a dedicated composite action under
 the workflow stays readable. Composite actions colocate their
 PowerShell script next to `action.yml` and invoke it via
 `${{ github.action_path }}`, which means action body and script ship
-together at the same SHA - no manual checkout of this repo into the
-consumer's workspace is required.
+together at the same SHA. The workflow runs a second
+`actions/checkout` of DotNet-Common into `.dotnet-common/` and
+references each composite action as `./.dotnet-common/.github/actions/<name>`,
+so action resolution is always against a known local path rather
+than a remote ref - see [Why two checkouts](#why-two-checkouts).
 
 **Job steps (in order):**
-1. `actions/checkout@v5` - check out the consumer repo.
-2. [`clear-workspace-artifacts`](.github/actions/clear-workspace-artifacts/) -
+1. `actions/checkout@v5` - check out the consumer repo (the code
+   being restored, built, tested, and measured).
+2. `actions/checkout@v5` - second checkout of `DotNet-Common` itself
+   into `.dotnet-common/`, used only as the source of the composite
+   actions every later step references. The `ref:` is
+   `github.workflow_sha` - the commit SHA of the called workflow
+   file - so a consumer that pinned `uses: ...ci-dotnet.yml@<sha>`
+   gets the composite actions from exactly that SHA; no master leak
+   across the SHA-pinned boundary. See
+   [Why two checkouts](#why-two-checkouts) below.
+3. [`clear-workspace-artifacts`](.github/actions/clear-workspace-artifacts/) -
    removes `bin/`, `obj/`, `TestResults/`, `CoverageReport/` anywhere
    under the workspace. Required because self-hosted runners persist
    `_work/` across jobs and stale output from a prior run can poison
    the build.
-3. [`assert-dotnet-sdk`](.github/actions/assert-dotnet-sdk/) - runs
+4. [`assert-dotnet-sdk`](.github/actions/assert-dotnet-sdk/) - runs
    `dotnet --version` and fails fast with a message pointing at
    `Infrastructure-GitHubRunners` if the SDK is missing, instead of
    letting `dotnet restore` produce a confusing error mid-job.
-4. [`assert-reportgenerator`](.github/actions/assert-reportgenerator/) -
+5. [`assert-reportgenerator`](.github/actions/assert-reportgenerator/) -
    verifies the ReportGenerator global tool is on PATH and fails fast
    with the same `Infrastructure-GitHubRunners` guidance if missing.
    Grouped with the SDK assertion so every required tool is checked
    before any long-running step.
-5. [`dotnet-restore`](.github/actions/dotnet-restore/) - `dotnet
+6. [`dotnet-restore`](.github/actions/dotnet-restore/) - `dotnet
    restore <solution-path>`.
-6. [`dotnet-build`](.github/actions/dotnet-build/) - `dotnet build
+7. [`dotnet-build`](.github/actions/dotnet-build/) - `dotnet build
    <solution-path> --no-restore`.
-7. [`dotnet-test`](.github/actions/dotnet-test/) - `dotnet test
+8. [`dotnet-test`](.github/actions/dotnet-test/) - `dotnet test
    <solution-path> --no-build --collect:"XPlat Code Coverage"
    --results-directory ./TestResults`. Separated from build so the
    workflow exposes two distinct failure surfaces (compile errors vs
@@ -81,20 +93,20 @@ consumer's workspace is required.
    gating this step on an input without disturbing the build pipeline.
    Coverage output lands at `TestResults/<guid>/coverage.cobertura.xml`
    for the report and threshold steps that follow.
-8. [`dotnet-coverage-report`](.github/actions/dotnet-coverage-report/) -
+9. [`dotnet-coverage-report`](.github/actions/dotnet-coverage-report/) -
    runs ReportGenerator over the Cobertura output from the test step
    and writes `CoverageReport/{index.html, Summary.txt, Cobertura.xml}`.
    The merged `Cobertura.xml` is the canonical input the threshold
    gate reads, so the gate does not need to glob `TestResults/`.
-9. [`assert-coverage-threshold`](.github/actions/assert-coverage-threshold/) -
-   reads `line-rate` from `CoverageReport/Cobertura.xml` and fails
-   the job with a diagnostic naming both the observed value and the
-   configured threshold when coverage drops below `coverage-threshold`.
-   Placed before the artifact upload so the gate is the final word on
-   the build; the upload step's `if: always()` guarantees reviewers
-   still get the report when the gate fails - that is exactly when
-   they need it most.
-10. `actions/upload-artifact@v4` - uploads the entire `CoverageReport/`
+10. [`assert-coverage-threshold`](.github/actions/assert-coverage-threshold/) -
+    reads `line-rate` from `CoverageReport/Cobertura.xml` and fails
+    the job with a diagnostic naming both the observed value and the
+    configured threshold when coverage drops below `coverage-threshold`.
+    Placed before the artifact upload so the gate is the final word on
+    the build; the upload step's `if: always()` guarantees reviewers
+    still get the report when the gate fails - that is exactly when
+    they need it most.
+11. `actions/upload-artifact@v4` - uploads the entire `CoverageReport/`
     directory as a single artifact named `coverage-report`. Runs with
     `if: always()` so reviewers can still inspect partial coverage if
     the test step or the threshold gate failed.
@@ -104,14 +116,17 @@ artifacts do not survive into a job that aborts at the assertion;
 the assertion in turn runs **before** restore so SDK absence is
 diagnosed at the right step.
 
-**Why each step is duplicated with `if:` guards:** local action
-references (`uses: ./.github/actions/<name>`) only resolve when this
-repo is the job's checked-out repo. For consumer invocations via
-`workflow_call`, the consumer's checkout is in the workspace, so each
-step has a sibling using the remote reference
-(`VitaliiAndreev/DotNet-Common/.github/actions/<name>@master`).
-Exactly one of each pair runs per job. This mirrors
-`Infrastructure-Common`'s reusable workflow pattern.
+**Why two checkouts:** the alternative (if-guarded pairs of `./` and
+`<repo>@master` step references) forces GitHub Actions to resolve
+the `@master` ref at job start even when the if-guard would skip the
+step, so a stale `master` (or a PR-branch action that does not yet
+exist on `master`) breaks the job before any step runs. A separate
+checkout of DotNet-Common into `.dotnet-common/`, with every step
+referencing `./.dotnet-common/.github/actions/<name>`, side-steps
+the eager-resolution footgun entirely. A small side-benefit: PR-time
+self-test runs now actually exercise PR changes to composite
+actions, because `github.workflow_sha` resolves to the PR head when
+the workflow runs on this repo.
 
 **Runner requirements:** the .NET SDK *and* the ReportGenerator
 global tool (`dotnet tool install -g dotnet-reportgenerator-globaltool`)

@@ -10,18 +10,29 @@ name: CI (.NET)
 # and its script ship together at the same SHA.
 #
 # Consumers invoke this workflow via `uses:` pinned to a commit SHA.
-# Coverage collection, reporting, and the threshold gate land in
-# subsequent plan steps (see docs/dev/implementation/).
 #
-# Why each step is duplicated with `if:` guards:
-#   Local action references (`uses: ./.github/actions/<name>`) only
-#   resolve when this repo's checkout is the job's checked-out repo,
-#   which is true only on PRs to DotNet-Common itself. When a
-#   consumer repo invokes this workflow via `workflow_call`, those
-#   local paths do not exist in the consumer's checkout, so each step
-#   has a sibling that uses the remote action reference instead.
-#   Exactly one of each pair runs per job. This pattern mirrors
-#   Infrastructure-Common's reusable workflows.
+# Why two checkouts:
+#   The first checkout is the consumer's code (the thing we restore,
+#   build, test, and measure). The second is a *separate* checkout of
+#   DotNet-Common itself into `.dotnet-common/`, used only as the
+#   source of the composite actions this workflow references via
+#   `uses: ./.dotnet-common/.github/actions/<name>`. The alternative
+#   - if-guarded pairs of `./` and `<repo>@master` step references -
+#   forces GitHub Actions to resolve the `@master` ref at job start
+#   even when the if-guard would skip the step, so a stale master
+#   (or a PR-branch action that does not yet exist on master) breaks
+#   the job before any step runs. Two-checkout side-steps the
+#   eager-resolution footgun entirely.
+#
+#   The second checkout's `ref` is `github.workflow_sha` - the commit
+#   SHA of the called workflow file. For a consumer that pinned
+#   `uses: ...ci-dotnet.yml@<sha>`, this resolves to <sha>, so the
+#   composite actions are taken from exactly the version the consumer
+#   asked for - no master-following leak across a SHA-pinned boundary.
+#   For self-test, where the workflow is called via a repo-relative
+#   `uses: ./.github/workflows/ci-dotnet.yml`, `github.workflow_sha`
+#   equals `github.sha` (same repo, same commit), so the PR's version
+#   of the actions is what gets tested.
 
 on:
   workflow_call:
@@ -56,120 +67,69 @@ jobs:
     name: Restore and build
     runs-on: [self-hosted, "${{ inputs.runs-on-label }}"]
     steps:
-      - name: Checkout
+      # Consumer code: the thing we restore / build / test / measure.
+      - name: Checkout consumer
         uses: actions/checkout@v5
 
-      # --- Clean workspace artifacts -------------------------------
-      - name: Clean workspace artifacts (local)
-        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
-        uses: ./.github/actions/clear-workspace-artifacts
+      # DotNet-Common action source: the composite actions every
+      # later step references via `./.dotnet-common/...`. See header
+      # comment for why this is a separate checkout instead of
+      # if-guarded `./` vs `@master` step pairs.
+      - name: Checkout DotNet-Common (action source)
+        uses: actions/checkout@v5
+        with:
+          repository: VitaliiAndreev/DotNet-Common
+          ref: ${{ github.workflow_sha }}
+          path: .dotnet-common
 
-      - name: Clean workspace artifacts (consumer)
-        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
-        uses: VitaliiAndreev/DotNet-Common/.github/actions/clear-workspace-artifacts@master
+      - name: Clean workspace artifacts
+        uses: ./.dotnet-common/.github/actions/clear-workspace-artifacts
 
-      # --- Assert .NET SDK -----------------------------------------
-      - name: Assert .NET SDK (local)
-        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
-        uses: ./.github/actions/assert-dotnet-sdk
+      - name: Assert .NET SDK
+        uses: ./.dotnet-common/.github/actions/assert-dotnet-sdk
 
-      - name: Assert .NET SDK (consumer)
-        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
-        uses: VitaliiAndreev/DotNet-Common/.github/actions/assert-dotnet-sdk@master
+      # Grouped with the SDK assertion so every required tool is
+      # checked before any long-running step.
+      - name: Assert ReportGenerator
+        uses: ./.dotnet-common/.github/actions/assert-reportgenerator
 
-      # --- Assert ReportGenerator ----------------------------------
-      # Lives next to the SDK assertion so every required tool is
-      # checked before any long-running step. Coverage reporting is
-      # the first consumer of this tool (later in the job), but
-      # failing fast here keeps the diagnostic adjacent to the other
-      # runner-image guidance.
-      - name: Assert ReportGenerator (local)
-        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
-        uses: ./.github/actions/assert-reportgenerator
-
-      - name: Assert ReportGenerator (consumer)
-        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
-        uses: VitaliiAndreev/DotNet-Common/.github/actions/assert-reportgenerator@master
-
-      # --- Restore -------------------------------------------------
-      - name: Restore (local)
-        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
-        uses: ./.github/actions/dotnet-restore
+      - name: Restore
+        uses: ./.dotnet-common/.github/actions/dotnet-restore
         with:
           solution-path: ${{ inputs.solution-path }}
 
-      - name: Restore (consumer)
-        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
-        uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-restore@master
+      - name: Build
+        uses: ./.dotnet-common/.github/actions/dotnet-build
         with:
           solution-path: ${{ inputs.solution-path }}
 
-      # --- Build ---------------------------------------------------
-      - name: Build (local)
-        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
-        uses: ./.github/actions/dotnet-build
+      - name: Test
+        uses: ./.dotnet-common/.github/actions/dotnet-test
         with:
           solution-path: ${{ inputs.solution-path }}
 
-      - name: Build (consumer)
-        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
-        uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-build@master
-        with:
-          solution-path: ${{ inputs.solution-path }}
-
-      # --- Test ----------------------------------------------------
-      - name: Test (local)
-        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
-        uses: ./.github/actions/dotnet-test
-        with:
-          solution-path: ${{ inputs.solution-path }}
-
-      - name: Test (consumer)
-        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
-        uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-test@master
-        with:
-          solution-path: ${{ inputs.solution-path }}
-
-      # --- Coverage report -----------------------------------------
       # Turns the raw Cobertura output from `dotnet-test` into a
       # browsable HTML report plus a text summary and merged
       # Cobertura. The merged Cobertura is the canonical input the
-      # threshold gate (Step 6) will read.
-      - name: Coverage report (local)
-        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
-        uses: ./.github/actions/dotnet-coverage-report
+      # threshold gate reads.
+      - name: Coverage report
+        uses: ./.dotnet-common/.github/actions/dotnet-coverage-report
 
-      - name: Coverage report (consumer)
-        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
-        uses: VitaliiAndreev/DotNet-Common/.github/actions/dotnet-coverage-report@master
-
-      # --- Coverage threshold gate ---------------------------------
       # Reads the merged Cobertura emitted by `dotnet-coverage-report`
       # and fails the job when line coverage drops below the
-      # configured threshold. Placed before the artifact upload so the
-      # gate is the final word on the build, but the upload step uses
-      # `if: always()` so reviewers still get the report when the gate
-      # fails - that is exactly when they need it most.
-      - name: Coverage threshold gate (local)
-        if: ${{ github.repository == 'VitaliiAndreev/DotNet-Common' }}
-        uses: ./.github/actions/assert-coverage-threshold
+      # configured threshold. Placed before the artifact upload so
+      # the gate is the final word on the build, but the upload step
+      # uses `if: always()` so reviewers still get the report when
+      # the gate fails - that is exactly when they need it most.
+      - name: Coverage threshold gate
+        uses: ./.dotnet-common/.github/actions/assert-coverage-threshold
         with:
           coverage-threshold: ${{ inputs.coverage-threshold }}
 
-      - name: Coverage threshold gate (consumer)
-        if: ${{ github.repository != 'VitaliiAndreev/DotNet-Common' }}
-        uses: VitaliiAndreev/DotNet-Common/.github/actions/assert-coverage-threshold@master
-        with:
-          coverage-threshold: ${{ inputs.coverage-threshold }}
-
-      # --- Upload coverage artifact --------------------------------
       # Single artifact carrying HTML, Summary.txt, and the merged
-      # Cobertura. Uploaded unconditionally on job completion (even on
-      # test failure) so reviewers can still inspect partial coverage
-      # for the assemblies whose tests did run. Pinned to the v4 major
-      # tag matching the existing `actions/checkout@v5` policy in this
-      # workflow; consumers of `ci-dotnet.yml` pin by SHA at the outer
-      # `uses:` per the supply-chain posture documented in README.md.
+      # Cobertura. Uploaded unconditionally on job completion (even
+      # on test failure) so reviewers can still inspect partial
+      # coverage for the assemblies whose tests did run.
       - name: Upload coverage artifact
         if: always()
         uses: actions/upload-artifact@v4
