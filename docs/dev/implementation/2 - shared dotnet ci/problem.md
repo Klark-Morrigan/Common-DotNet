@@ -51,8 +51,11 @@
   runner label.
 - Document inputs, secrets, runner requirements, and the SHA-pinning
   expectation for consumers in this repo's `README.md`.
-- A tagged release (or pinned SHA) is identified as the reference consumers
-  should adopt.
+- A reference commit SHA on `master` is identified as the pin target
+  consumers should adopt. Tagged releases are deferred until this repo
+  ships production .NET code that needs versioned artifacts; for
+  workflow- and composite-action-only content, SHA pinning is the
+  recommended supply-chain posture (tags are mutable, SHAs are not).
 
 ## Out of Scope
 - Consumer wiring in SynergyOps.TaskManager and SynergyOps.Suite (separate
@@ -95,7 +98,8 @@
   expectations.
 - `ci-dotnet.yml` is callable via `workflow_call` and produces: build,
   test, coverage report artifact, and a pass/fail coverage gate.
-- A reference SHA (or tag) is identified for consumers to pin to.
+- A reference commit SHA on `master` is identified for consumers to
+  pin to.
 - A dry-run consumer (a minimal sample workflow in this repo or a
   documented invocation snippet) demonstrates a green end-to-end run on a
   self-hosted runner.

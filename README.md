@@ -10,9 +10,11 @@ MSBuild props, analyzer rulesets, base test SDKs) that every SynergyOps
 - [Status](#status)
 - [Workflows](#workflows)
   - [ci-dotnet.yml](#ci-dotnetyml)
+  - [self-test.yml](#self-testyml)
 - [Artifacts](#artifacts)
 - [Composite actions](#composite-actions)
 - [Self-test sample](#self-test-sample)
+- [Branch protection](#branch-protection)
 - [Implementation docs](#implementation-docs)
 
 ## Status
@@ -126,6 +128,22 @@ threshold steps fail. Output path is
 `TestResults/<guid>/coverage.cobertura.xml`, relative to the working
 directory the test step runs in.
 
+### self-test.yml
+Thin wrapper that calls [`ci-dotnet.yml`](#ci-dotnetyml) against the
+in-repo [self-test sample](#self-test-sample) on every `push` and
+`pull_request` to `master`. Without it, regressions in the reusable
+workflow (or in any of its composite actions) would land unnoticed
+and surface only when a downstream consumer's CI breaks.
+
+The wrapper invokes the reusable workflow with a repo-relative
+`uses: ./.github/workflows/ci-dotnet.yml` (no `@ref`), which pins the
+called workflow to the same commit as the caller - the only correct
+behavior for a self-test, since the whole point is validating the
+version of `ci-dotnet.yml` that ships with this commit.
+
+See [Branch protection](#branch-protection) for the required check
+configuration.
+
 ## Artifacts
 The workflow uploads one artifact per job run:
 
@@ -170,16 +188,38 @@ finer control or atomic per-action SHA pinning:
 `tests/sample/` is a minimal .NET solution (one class library plus one
 xUnit test project, targeting `net10.0`) whose only job is to give the
 in-progress reusable workflow something to build, test, and measure
-coverage against. It is temporary scaffolding: once this repo gains real
-shared .NET code, the self-test workflow is retargeted at that real
-code and the sample is removed (see Step 9 in
-[plan.md](docs/dev/implementation/2%20-%20shared%20dotnet%20ci/plan.md)).
+coverage against. It is scaffolding: once this repo gains real shared
+.NET code (MSBuild props, analyzers, a base test SDK, or similar),
+that code becomes the natural self-test target and the sample is
+retired in favour of it.
 
 Local validation:
 ```
 dotnet build tests/sample/Sample.sln
 dotnet test  tests/sample/Sample.sln
 ```
+
+## Branch protection
+The [`self-test.yml`](#self-testyml) workflow must be a required
+status check on `master`. GitHub does not let workflow files declare
+their own branch-protection rules, so this is configured manually
+once in the repository settings:
+
+1. Repository **Settings** -> **Branches** -> **Branch protection
+   rules** -> add or edit the rule for `master`.
+2. Enable **Require status checks to pass before merging**.
+3. Under the status-check search box, add the job-level check
+   **`Self-test (ci-dotnet) / Restore and build`**. The left half
+   comes from `name:` in `self-test.yml`; the right half comes from
+   the `name:` of the `build` job in `ci-dotnet.yml`. If either name
+   changes, the protection rule must be re-pointed - GitHub does not
+   auto-update it.
+4. Enable **Require branches to be up to date before merging** so
+   stale PRs cannot bypass the gate by merging against an older
+   `master`.
+
+Without this manual step the workflow still runs on every PR but a
+red result is advisory only - merges are not blocked.
 
 ## Implementation docs
 - [Shared .NET CI - problem](docs/dev/implementation/2%20-%20shared%20dotnet%20ci/problem.md)

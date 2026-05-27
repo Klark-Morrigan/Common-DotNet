@@ -19,8 +19,6 @@ single documentation step.
 - [Step 5 - Report Generation and Artifact Upload](#step-5---report-generation-and-artifact-upload)
 - [Step 6 - Coverage Threshold Gate](#step-6---coverage-threshold-gate)
 - [Step 7 - Self-Test Workflow](#step-7---self-test-workflow)
-- [Step 8 - Initial Tagged Release](#step-8---initial-tagged-release)
-- [Step 9 - Decommission Self-Test Sample](#step-9---decommission-self-test-sample)
 
 ---
 
@@ -38,8 +36,9 @@ every subsequent step.
 - `tests/sample/tests/Sample.Tests/Sample.Tests.csproj` (xUnit) with one
   passing test that exercises the library
 - TFM matches the lowest version SynergyOps repos will target
-- `README.md`: add "Self-test sample" section noting purpose and that it
-  is temporary scaffolding (see Step 9)
+- `README.md`: add "Self-test sample" section noting purpose and that
+  it is scaffolding to be replaced once this repo gains real shared
+  .NET code that can serve as the self-test target
 
 **Tests:**
 - `dotnet build tests/sample/Sample.sln` succeeds
@@ -271,82 +270,6 @@ flowchart LR
   PR[Pull Request] --> ST[self-test.yml]
   ST -->|uses local| CI[ci-dotnet.yml]
   CI --> SAMPLE[tests/sample/Sample.sln]
-```
-
----
-
-## Step 8 - Initial Tagged Release
-
-**Reason:** Consumers need a concrete reference to pin to. A tag (and
-the SHA it points at) makes the contract explicit and lets future
-breaking changes be released as a new tag without surprising existing
-consumers. SHA-pinning guidance lands here too because the SHA only
-exists once the tag is cut.
-
-**Changes:**
-- Annotated tag `v0.1.0` on the head of `master`
-- Push tag to remote
-- `README.md`: finalize "How To Consume" with a concrete pinned-SHA
-  example (the tag's commit SHA, not the tag name); add "Security
-  Notes" section explaining the SHA-pinning rationale and the
-  supply-chain risk of branch-pinning on self-hosted runners
-
-**Tests:**
-- `git show v0.1.0` resolves
-- All `README.md` links resolve; markdown renders cleanly
-- A scratch consumer workflow (run once locally or in
-  SynergyOps.TaskManager off a throwaway branch) using the pinned SHA
-  goes green end-to-end on a self-hosted runner
-
-```mermaid
-sequenceDiagram
-  participant M as master
-  participant T as v0.1.0 tag
-  participant C as Consumer
-  M->>T: annotate at SHA
-  T->>C: documented SHA reference
-  C->>T: uses @<sha>
-```
-
----
-
-## Step 9 - Decommission Self-Test Sample
-
-**Reason:** `tests/sample/` exists only to give the reusable workflow
-something to run against while the repo has no real code. Once this
-repo is populated with genuine .NET code (shared MSBuild props,
-analyzers, a base test SDK, or similar), that code becomes the natural
-self-test target and the sample is dead weight that drifts out of date.
-
-**Precondition (gate this step on):**
-- At least one non-sample .NET project lives in this repo (with its own
-  tests) that exercises `ci-dotnet.yml` end-to-end.
-- `self-test.yml` has been retargeted to that real project's solution
-  (separate commit, lands before this one).
-
-**Changes:**
-- Delete `tests/sample/`
-- Remove any sample-specific references from `README.md`
-- Confirm `.gitignore` entries that were sample-specific (none expected)
-  are pruned
-
-**Tests:**
-- `self-test.yml` still goes green on a self-hosted runner against the
-  real project's solution
-- `git grep tests/sample` returns no matches
-- A consumer pinned to the prior SHA continues to work (the removal is
-  not a breaking change to the workflow contract; it only changes what
-  this repo self-tests against)
-
-```mermaid
-flowchart LR
-  subgraph Before
-    ST1[self-test.yml] --> SAMPLE[tests/sample/]
-  end
-  subgraph After
-    ST2[self-test.yml] --> REAL[real project solution]
-  end
-  Before -. retarget then delete .-> After
 ```
 
 ---
