@@ -57,3 +57,7 @@ desktop.ini
 .env
 .env.*
 !.env.example
+
+# graphify knowledge graph artifacts (local; rebuilt by graphify)
+graphify-out/
+supersets-out/
