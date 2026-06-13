@@ -1,7 +1,7 @@
-# DotNet-Common
+# Common-DotNet
 
 Shared .NET CI building blocks for SynergyOps repositories. Mirrors the
-role `Infrastructure-Common` plays for PowerShell modules: a single
+role `PowerShell-Common` plays for PowerShell modules: a single
 source of truth for reusable GitHub Actions workflows (and, later,
 MSBuild props, analyzer rulesets, base test SDKs) that every SynergyOps
 .NET repo consumes by `uses:` reference pinned to a commit SHA.
@@ -51,16 +51,16 @@ the workflow stays readable. Composite actions colocate their
 PowerShell script next to `action.yml` and invoke it via
 `${{ github.action_path }}`, which means action body and script ship
 together at the same SHA. The workflow runs a second
-`actions/checkout` of DotNet-Common into `.dotnet-common/` and
-references each composite action as `./.dotnet-common/.github/actions/<name>`,
+`actions/checkout` of Common-DotNet into `.common-dotnet/` and
+references each composite action as `./.common-dotnet/.github/actions/<name>`,
 so action resolution is always against a known local path rather
 than a remote ref - see [Why two checkouts](#why-two-checkouts).
 
 **Job steps (in order):**
 1. `actions/checkout@v5` - check out the consumer repo (the code
    being restored, built, tested, and measured).
-2. `actions/checkout@v5` - second checkout of `DotNet-Common` itself
-   into `.dotnet-common/`, used only as the source of the composite
+2. `actions/checkout@v5` - second checkout of `Common-DotNet` itself
+   into `.common-dotnet/`, used only as the source of the composite
    actions every later step references. The `ref:` is
    `github.workflow_sha` - the commit SHA of the called workflow
    file - so a consumer that pinned `uses: ...ci-dotnet.yml@<sha>`
@@ -121,8 +121,8 @@ diagnosed at the right step.
 the `@master` ref at job start even when the if-guard would skip the
 step, so a stale `master` (or a PR-branch action that does not yet
 exist on `master`) breaks the job before any step runs. A separate
-checkout of DotNet-Common into `.dotnet-common/`, with every step
-referencing `./.dotnet-common/.github/actions/<name>`, side-steps
+checkout of Common-DotNet into `.common-dotnet/`, with every step
+referencing `./.common-dotnet/.github/actions/<name>`, side-steps
 the eager-resolution footgun entirely. A small side-benefit: PR-time
 self-test runs now actually exercise PR changes to composite
 actions, because `github.workflow_sha` resolves to the PR head when
