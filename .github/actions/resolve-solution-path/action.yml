@@ -1,0 +1,25 @@
+name: Resolve solution path
+description: >
+  Resolves the .sln/.slnx the pipeline builds and publishes it to
+  $GITHUB_ENV as SOLUTION_PATH. An explicit `solution-path` input wins;
+  when omitted, the repo is scanned for a single solution so simple
+  consumers (and this repo's self-test) need no input. Zero or multiple
+  matches fail with an actionable message rather than guessing wrong.
+
+inputs:
+  solution-path:
+    description: >
+      Explicit path to the .sln/.slnx, relative to the consumer repo
+      root. Empty (the default) triggers auto-discovery of a single
+      solution file.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve solution path
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Resolve-SolutionPath.ps1" `
+          -SolutionPath '${{ inputs.solution-path }}'
