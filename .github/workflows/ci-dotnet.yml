@@ -36,15 +36,16 @@ name: CI (.NET)
 #
 # Dual runner support, split across two independent signals:
 #
-#   1. WHICH machine - `runs-on` is the `CI_DOTNET_RUNNER` repo/org
-#      variable when set, else the self-hosted default. The variable
-#      accepts either a bare label (`ubuntu-latest`, or a unique
-#      self-hosted pool label) or a JSON array for multi-label
-#      intersection targeting (`["self-hosted","linux","gpu"]`). Public
-#      consumers (whose GitHub-hosted minutes are free, unlike
-#      private-repo minutes) set it to a hosted label; private repos
-#      leave it unset and stay self-hosted. Selection lives entirely in
-#      repo/org settings - consumers pass no input.
+#   1. WHICH machine - `runs-on` precedence: the `runner` input override
+#      (a one-off, via workflow_dispatch or a consumer's `with:`), else
+#      the `CI_DOTNET_RUNNER` repo/org variable, else the self-hosted
+#      default. Both the input and the variable are JSON label arrays -
+#      `["ubuntu-latest"]` for a single label, or
+#      `["self-hosted","linux","gpu"]` for multi-label intersection.
+#      Public consumers (whose GitHub-hosted minutes are free, unlike
+#      private-repo minutes) set the variable to a hosted label; private
+#      repos leave it unset and stay self-hosted. Steady-state selection
+#      lives in repo/org settings - the input is just for overrides.
 #
 #   2. WHETHER to install the toolchain - the `provision-dotnet-toolchain`
 #      call is gated on `runner.environment` (github-hosted vs
@@ -64,8 +65,31 @@ on:
   # `coverage-threshold` is defaulted inside its composite.
   pull_request:
     branches: [master]
+  # Manual runs let a maintainer override the runner for a one-off (e.g.
+  # force a hosted runner to reproduce a consumer's environment). This is
+  # the only override path for THIS repo's own runs, since pull_request
+  # cannot carry inputs.
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: >-
+          Optional runs-on override for this run, as a JSON label array
+          (e.g. `["ubuntu-latest"]` or `["self-hosted","gpu"]`). Takes
+          precedence over the CI_DOTNET_RUNNER variable.
+        required: false
+        type: string
+        default: ''
   workflow_call:
     inputs:
+      runner:
+        description: >-
+          Optional runs-on override, as a JSON label array (e.g.
+          `["ubuntu-latest"]`). Takes precedence over the
+          CI_DOTNET_RUNNER variable; consumers pass it in `with:` to
+          override per-call. Leave empty to use the variable.
+        required: false
+        type: string
+        default: ''
       solution-path:
         description: >-
           Path to the .sln (or .slnx) file to restore and build,
@@ -100,15 +124,15 @@ on:
 jobs:
   build:
     name: Build, test, and measure coverage
-    # Runner selection from the `CI_DOTNET_RUNNER` variable, in three
-    # forms: unset -> any self-hosted; a value starting with '[' is
-    # parsed as a JSON label array (multi-label intersection); any other
-    # value is a single bare label. This only picks the machine - whether
-    # the toolchain gets installed is decided separately at runtime via
-    # `runner.environment` on the provision step.
-    runs-on: ${{ vars.CI_DOTNET_RUNNER == '' && fromJSON('["self-hosted"]')
-      || (startsWith(vars.CI_DOTNET_RUNNER, '[') && fromJSON(vars.CI_DOTNET_RUNNER)
-          || fromJSON(format('["{0}"]', vars.CI_DOTNET_RUNNER))) }}
+    # Runner selection, highest precedence first: the `runner` input
+    # (a one-off override), else the `CI_DOTNET_RUNNER` variable, else
+    # any self-hosted runner. Each value is a JSON label array, e.g.
+    # ["ubuntu-latest"] or ["self-hosted","linux","gpu"]. This only picks
+    # the machine - whether the toolchain is installed is decided
+    # separately at runtime via `runner.environment`.
+    runs-on: ${{ inputs.runner != '' && fromJSON(inputs.runner)
+      || vars.CI_DOTNET_RUNNER != '' && fromJSON(vars.CI_DOTNET_RUNNER)
+      || fromJSON('["self-hosted"]') }}
     # Declared so static analysis (actionlint) recognizes the context
     # access below; the real value is set at runtime by the
     # resolve-solution-path step via $GITHUB_ENV.

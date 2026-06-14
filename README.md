@@ -31,22 +31,30 @@ the report uploaded as a build artifact), and a coverage threshold gate
 that fails the job when line coverage drops below a consumer-configurable
 bar.
 
-It has a dual `on:` - `workflow_call` for consumers, plus `pull_request`
-(targeting `master`) so it **self-triggers in this repo**, validating
-itself against the [self-test sample](#self-test-sample) with no separate
-caller file. This is the same one-file pattern the other SynergyOps
-reusable-workflow repos use (e.g. GitHub-Common's `ci-bash.yml`). There
-is no `push` trigger - a PR to `master` already runs this gate before
-merge, so a post-merge re-run would be redundant. A workflow's `on:`
-triggers fire only in the repo that hosts the file, so the self-trigger
-is invisible to consumers, who reach it only via `uses:`. Because input
-defaults do not apply on `pull_request` (the `inputs` context is
-populated only for `workflow_call`), every input is empty-safe:
+It has three `on:` triggers - `workflow_call` for consumers,
+`pull_request` (targeting `master`) so it **self-triggers in this repo**
+(validating itself against the [self-test sample](#self-test-sample) with
+no separate caller file), and `workflow_dispatch` so a maintainer can run
+it manually with a one-off `runner` override. This is the same one-file
+pattern the other SynergyOps reusable-workflow repos use (e.g.
+GitHub-Common's `ci-bash.yml`). There is no `push` trigger - a PR to
+`master` already runs this gate before merge, so a post-merge re-run
+would be redundant. A workflow's `on:` triggers fire only in the repo
+that hosts the file, so the self-trigger is invisible to consumers, who
+reach it only via `uses:`. Because input defaults do not apply on
+`pull_request` (the `inputs` context is populated only for
+`workflow_call` and `workflow_dispatch`), every input is empty-safe:
 `solution-path` auto-discovers, `dotnet-version` is coalesced to its
 default at the use site, and `coverage-threshold` is defaulted inside its
 composite.
 
 **Inputs:**
+- `runner` (string, optional, default empty) - one-off `runs-on`
+  override that takes precedence over the `CI_DOTNET_RUNNER` variable.
+  Same forms as the variable (bare label or JSON array). Settable via
+  `workflow_dispatch` (manual run) or a consumer's `with:`; not settable
+  on this repo's automatic `pull_request` runs. Leave empty to use the
+  variable.
 - `solution-path` (string, optional, default empty) - path to the
   `.sln`/`.slnx` to restore and build, relative to the consumer repo
   root. When omitted, the
@@ -172,9 +180,12 @@ repo self-triggers on a PR, the run exercises the PR's own composite
 changes end-to-end, because the self path uses `./` (the PR head
 workspace) rather than a pinned `master` ref.
 
-**Selecting the runner:** `runs-on` is driven entirely by the
-`CI_DOTNET_RUNNER` repository or organization variable, which accepts
-three forms:
+**Selecting the runner:** `runs-on` is resolved by precedence - the
+`runner` input override (highest), then the `CI_DOTNET_RUNNER` repository
+or organization variable, then any self-hosted runner. Steady-state
+selection lives in the variable; the input is for one-off overrides
+(`workflow_dispatch` or a consumer's `with:`). The variable accepts
+three forms (the input accepts the same):
 
 | `CI_DOTNET_RUNNER` | `runs-on` | use |
 | --- | --- | --- |
@@ -196,10 +207,13 @@ repos meter Actions minutes, public repos do not:
 - **Public repos:** set `CI_DOTNET_RUNNER` to a hosted label (e.g.
   `ubuntu-latest`). No caller-YAML change.
 
-A configuration variable (not an input) is used so the choice lives in
-settings and a thin caller workflow needs no runner argument at all. An
-org-level `CI_DOTNET_RUNNER` with per-repo overrides lets the whole org
-default one way and exceptions opt out.
+A configuration variable (not an input) is used for *steady-state*
+selection so the choice lives in settings and a thin caller workflow
+needs no runner argument at all. An org-level `CI_DOTNET_RUNNER` with
+per-repo overrides lets the whole org default one way and exceptions opt
+out. The `runner` input sits above it only for one-off runs - e.g.
+manually dispatching against a hosted runner to reproduce a consumer's
+environment, without touching the variable.
 
 **Runner requirements:** the toolchain comes from a different place
 depending on where the job lands, decided at runtime by
