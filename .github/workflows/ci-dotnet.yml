@@ -115,9 +115,11 @@ jobs:
     env:
       SOLUTION_PATH: ''
     steps:
-      - uses: actions/checkout@v5
+      - name: Check out consumer repo
+        uses: actions/checkout@v5
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Check out Common-DotNet action source
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: actions/checkout@v5
         with:
           repository: VitaliiAndreev/Common-DotNet
@@ -126,10 +128,15 @@ jobs:
           sparse-checkout: .github/actions
           sparse-checkout-cone-mode: false
 
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      # Self-hosted only: this clears artifacts left in the persistent
+      # _work/ dir by a prior job. GitHub-hosted runners get a fresh VM
+      # per job, so there is nothing stale to wipe - skip the no-op.
+      - name: Clear workspace artifacts (self)
+        if: runner.environment == 'self-hosted' && github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/clear-workspace-artifacts
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Clear workspace artifacts (external)
+        if: runner.environment == 'self-hosted' && github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/clear-workspace-artifacts
 
       # Resolve the solution once and publish it as $SOLUTION_PATH for
@@ -138,12 +145,14 @@ jobs:
       # first step that needs it). Only one of the pair runs - the
       # other is skipped by its repository guard - and both write the
       # same env var, so downstream steps read one canonical value.
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Resolve solution path (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/resolve-solution-path
         with:
           solution-path: ${{ inputs.solution-path }}
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Resolve solution path (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/resolve-solution-path
         with:
           solution-path: ${{ inputs.solution-path }}
@@ -158,58 +167,70 @@ jobs:
       # assert-* preflights so on the hosted path those asserts confirm
       # the install rather than failing on a bare image. (The second
       # guard is the repository self/external split, as on every step.)
-      - if: runner.environment == 'github-hosted' && github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Provision .NET toolchain (self)
+        if: runner.environment == 'github-hosted' && github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/provision-dotnet-toolchain
         with:
           dotnet-version: ${{ inputs.dotnet-version || '10.0.x' }}
 
-      - if: runner.environment == 'github-hosted' && github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Provision .NET toolchain (external)
+        if: runner.environment == 'github-hosted' && github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/provision-dotnet-toolchain
         with:
           dotnet-version: ${{ inputs.dotnet-version || '10.0.x' }}
 
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Assert .NET SDK present (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/assert-dotnet-sdk
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Assert .NET SDK present (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/assert-dotnet-sdk
 
       # Grouped with the SDK assertion so every required tool is
       # checked before any long-running step.
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Assert ReportGenerator present (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/assert-reportgenerator
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Assert ReportGenerator present (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/assert-reportgenerator
 
       # Build/test steps read the resolved $SOLUTION_PATH, not the raw
       # input, so auto-discovery and an explicit input share one path.
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Restore (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/dotnet-restore
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Restore (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-restore
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
 
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Build (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/dotnet-build
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Build (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-build
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
 
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Test with coverage (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/dotnet-test
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Test with coverage (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-test
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
@@ -218,10 +239,12 @@ jobs:
       # browsable HTML report plus a text summary and merged
       # Cobertura. The merged Cobertura is the canonical input the
       # threshold gate reads.
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Generate coverage report (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/dotnet-coverage-report
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Generate coverage report (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-coverage-report
 
       # Reads the merged Cobertura emitted by `dotnet-coverage-report`
@@ -230,12 +253,14 @@ jobs:
       # the gate is the final word on the build, but the upload step
       # uses `if: always()` so reviewers still get the report when
       # the gate fails - that is exactly when they need it most.
-      - if: github.repository == 'VitaliiAndreev/Common-DotNet'
+      - name: Enforce coverage threshold (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
         uses: ./.github/actions/assert-coverage-threshold
         with:
           coverage-threshold: ${{ inputs.coverage-threshold }}
 
-      - if: github.repository != 'VitaliiAndreev/Common-DotNet'
+      - name: Enforce coverage threshold (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/assert-coverage-threshold
         with:
           coverage-threshold: ${{ inputs.coverage-threshold }}
