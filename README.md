@@ -1,7 +1,7 @@
 # Common-DotNet
 
 Shared .NET CI building blocks for SynergyOps repositories. Mirrors the
-role `PowerShell-Common` plays for PowerShell modules: a single
+role `Common-PowerShell` plays for PowerShell modules: a single
 source of truth for reusable GitHub Actions workflows (and, later,
 MSBuild props, analyzer rulesets, base test SDKs) that every SynergyOps
 .NET repo consumes by `uses:` reference pinned to a commit SHA.

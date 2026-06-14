@@ -14,7 +14,7 @@
 - SynergyOps.TaskManager and SynergyOps.Suite are the only .NET repos so far
   and neither has a `.github/` folder; .NET CI is greenfield across the org.
 - Infrastructure repositories share CI via reusable workflows published by
-  `PowerShell-Common` (`ci-powershell.yml`, `ci-powershell-docker-host.yml`,
+  `Common-PowerShell` (`ci-powershell.yml`, `ci-powershell-docker-host.yml`,
   `ci-powershell-docker-target.yml`, `tag.yml`, `publish.yml`) and consumed
   with `uses:`. The pattern is proven; it just does not cover .NET.
 - CI executes on self-hosted runners provisioned via
@@ -31,10 +31,10 @@
   have access to internal networks.
 
 ## Why This Repo
-- `PowerShell-Common`'s de facto scope is PowerShell module CI; its
+- `Common-PowerShell`'s de facto scope is PowerShell module CI; its
   workflows are named `ci-powershell-*` and every consumer is a PS module.
   Adding .NET workflows there would stretch its purpose and weaken cohesion.
-- `Common-DotNet` mirrors the `PowerShell-Common` naming so each shared
+- `Common-DotNet` mirrors the `Common-PowerShell` naming so each shared
   repo owns one stack's conventions.
 - It also leaves room to grow beyond workflows: shared MSBuild
   `Directory.Build.props`, analyzer rulesets, a base test SDK, and similar
