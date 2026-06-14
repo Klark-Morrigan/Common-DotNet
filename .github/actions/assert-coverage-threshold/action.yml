@@ -33,4 +33,4 @@ runs:
       run: |
         & "${{ github.action_path }}/Assert-CoverageThreshold.ps1" `
           -CoberturaPath '${{ inputs.cobertura-path }}' `
-          -Threshold ([double]'${{ inputs.coverage-threshold }}')
+          -Threshold '${{ inputs.coverage-threshold }}'

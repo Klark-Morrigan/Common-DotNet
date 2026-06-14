@@ -21,11 +21,27 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $CoberturaPath,
 
-    [Parameter(Mandatory = $true)]
-    [double] $Threshold
+    # Taken as a string, not [double], so an empty value (which is what
+    # arrives when the reusable workflow self-triggers on push/PR, where
+    # input defaults do not apply) falls back to the house default rather
+    # than throwing on `[double]''`. An explicit '0' is preserved - it is
+    # not empty - so a consumer can still disable the gate.
+    [string] $ThresholdInput = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($ThresholdInput)) {
+    $ThresholdInput = '90'
+}
+
+# Invariant parsing so a runner with a non-en-US culture does not misread
+# a decimal threshold; the previous inline [double] cast used the current
+# culture and was a latent locale bug.
+[double] $Threshold = [double]::Parse(
+    $ThresholdInput,
+    [System.Globalization.CultureInfo]::InvariantCulture
+)
 
 # Coverage is a percentage of executed lines, so the meaningful range
 # is [0, 100]. Anything above 100 is silently capped rather than
