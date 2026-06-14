@@ -51,10 +51,10 @@ composite.
 **Inputs:**
 - `runner` (string, optional, default empty) - one-off `runs-on`
   override that takes precedence over the `CI_DOTNET_RUNNER` variable.
-  Same forms as the variable (bare label or JSON array). Settable via
-  `workflow_dispatch` (manual run) or a consumer's `with:`; not settable
-  on this repo's automatic `pull_request` runs. Leave empty to use the
-  variable.
+  A JSON label array (e.g. `["ubuntu-latest"]`), same format as the
+  variable. Settable via `workflow_dispatch` (manual run) or a
+  consumer's `with:`; not settable on this repo's automatic
+  `pull_request` runs. Leave empty to use the variable.
 - `solution-path` (string, optional, default empty) - path to the
   `.sln`/`.slnx` to restore and build, relative to the consumer repo
   root. When omitted, the
@@ -74,10 +74,10 @@ composite.
 **Variables:**
 - `CI_DOTNET_RUNNER` (repository or organization variable, optional) -
   the `runs-on` selector consumers use to pick the runner without
-  touching their caller YAML. Accepts a bare label (`ubuntu-latest`, or
-  a unique self-hosted pool label) or a JSON array for multi-label
-  targeting (`["self-hosted","linux","gpu"]`). Unset selects any
-  self-hosted runner. See the **Selecting the runner** note below.
+  touching their caller YAML. A JSON label array - `["ubuntu-latest"]`
+  for a single label, or `["self-hosted","linux","gpu"]` for multi-label
+  targeting. Unset selects any self-hosted runner. See the
+  **Selecting the runner** note below.
 
 **Orchestration model:** the workflow YAML is an orchestrator. Each
 step delegates to a dedicated composite action under
@@ -190,14 +190,14 @@ three forms (the input accepts the same):
 | `CI_DOTNET_RUNNER` | `runs-on` | use |
 | --- | --- | --- |
 | *(unset)* | `[self-hosted]` | any self-hosted runner |
-| `ubuntu-latest` | `[ubuntu-latest]` | public repo / GitHub-hosted |
-| `dotnet-build` | `[dotnet-build]` | one self-hosted pool, by unique label |
+| `["ubuntu-latest"]` | `[ubuntu-latest]` | public repo / GitHub-hosted |
+| `["dotnet-build"]` | `[dotnet-build]` | one self-hosted pool, by unique label |
 | `["self-hosted","linux","gpu"]` | `[self-hosted, linux, gpu]` | a specific runner, by label intersection |
 
-A value starting with `[` is parsed as a JSON label array (matches a
-runner carrying *all* listed labels); any other value is a single bare
-label. The bare form keeps the common case simple; JSON unlocks
-multi-label targeting.
+The value is parsed as a JSON label array (the job runs on a runner
+carrying *all* listed labels). One consistent format - even a single
+label is bracketed, e.g. `["ubuntu-latest"]`. A non-JSON value fails
+`fromJSON` at job setup, so a typo surfaces immediately.
 
 The intended consumer model maps to the GitHub billing split - private
 repos meter Actions minutes, public repos do not:
