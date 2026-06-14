@@ -1,12 +1,12 @@
 name: Provision .NET toolchain
 description: >
-  Installs the .NET SDK and the ReportGenerator global tool on a
-  GitHub-hosted runner, where neither is baked into the image. On the
-  self-hosted pool both come from Infrastructure-GitHubRunners, so the
-  reusable workflow gates this action on `hosted-runner` being set and
-  never runs it there. Placed before the assert-* preflights, so on the
-  hosted path those asserts verify a successful install rather than
-  failing - the same checks guard both runner types.
+  Installs the .NET SDK and the ReportGenerator global tool that a
+  GitHub-hosted image does not carry. This action always installs when
+  invoked - deciding *whether* a given runner needs it is the caller's
+  job. The reusable workflow gates the call on `runner.environment` so
+  it runs only on GitHub-hosted runners, where Infrastructure-GitHubRunners
+  does not supply the toolchain. Placed before the assert-* preflights,
+  so those asserts verify a successful install rather than failing.
 
 inputs:
   dotnet-version:

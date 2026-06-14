@@ -1,7 +1,8 @@
 # Installs the ReportGenerator global tool on a GitHub-hosted runner,
-# where it is not baked into the image. On the self-hosted pool the tool
-# comes from Infrastructure-GitHubRunners, so the reusable workflow does
-# not run this action there - this script never touches that path.
+# where it is not baked into the image. The reusable workflow gates the
+# whole provision-dotnet-toolchain call on `runner.environment`, so on
+# self-hosted (where Infrastructure-GitHubRunners supplies the tool)
+# this script is never invoked.
 #
 # Idempotent: a warm tool cache or a job re-run must not fail on "tool
 # already installed", so we probe with Get-Command first (the same
