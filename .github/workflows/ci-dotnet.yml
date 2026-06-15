@@ -13,7 +13,7 @@ name: CI (.NET)
 # It also self-triggers on this repo's own PRs targeting master, so it
 # validates itself against the in-repo sample with no separate caller
 # file - the same one-file pattern the other SynergyOps reusable-workflow
-# repos use (e.g. GitHub-Common's `ci-bash.yml`). There is no `push`
+# repos use (e.g. Common-Automation's `ci-bash.yml`). There is no `push`
 # trigger: a PR to master already runs this gate before merge, so a
 # post-merge re-run on master would be redundant. A workflow's `on:`
 # triggers fire only in the repo that hosts the file, so the self-trigger

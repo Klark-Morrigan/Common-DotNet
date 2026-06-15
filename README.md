@@ -37,7 +37,7 @@ It has three `on:` triggers - `workflow_call` for consumers,
 no separate caller file), and `workflow_dispatch` so a maintainer can run
 it manually with a one-off `runner` override. This is the same one-file
 pattern the other SynergyOps reusable-workflow repos use (e.g.
-GitHub-Common's `ci-bash.yml`). There is no `push` trigger - a PR to
+Common-Automation's `ci-bash.yml`). There is no `push` trigger - a PR to
 `master` already runs this gate before merge, so a post-merge re-run
 would be redundant. A workflow's `on:` triggers fire only in the repo
 that hosts the file, so the self-trigger is invisible to consumers, who

@@ -5,7 +5,7 @@
 # An explicit `solution-path` always wins. When omitted, the repo is
 # scanned for a single .sln/.slnx so simple consumers (and this repo's
 # own self-test) need no input at all - matching the input-free
-# ergonomics of the GitHub-Common reusable workflows. Ambiguity is an
+# ergonomics of the Common-Automation reusable workflows. Ambiguity is an
 # error, not a silent pick: zero or multiple matches fail with an
 # actionable message rather than guessing wrong and building the wrong
 # solution.
