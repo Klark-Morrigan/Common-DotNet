@@ -1,0 +1,19 @@
+name: dotnet restore
+description: >
+  Restores NuGet packages for the given solution. Split into a
+  composite action so each step in the reusable workflow has its own
+  failure surface and can be consumed independently with SHA pinning.
+
+inputs:
+  solution-path:
+    description: Path to the .sln/.slnx to restore.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Restore
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Invoke-DotnetRestore.ps1" `
+          -SolutionPath '${{ inputs.solution-path }}'

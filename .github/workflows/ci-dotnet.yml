@@ -1,0 +1,302 @@
+name: CI (.NET)
+
+# Reusable .NET CI workflow for SynergyOps repositories.
+#
+# This YAML orchestrates the job. Each step delegates to a dedicated
+# composite action under `.github/actions/`, so per-step logic stays
+# testable in isolation and the workflow stays readable. Composite
+# actions colocate their PowerShell script next to action.yml and
+# invoke it via ${{ github.action_path }}, which means the action body
+# and its script ship together at the same SHA.
+#
+# Consumers invoke this workflow via `uses:` pinned to a commit SHA.
+# It also self-triggers on this repo's own PRs targeting master, so it
+# validates itself against the in-repo sample with no separate caller
+# file - the same one-file pattern the other SynergyOps reusable-workflow
+# repos use (e.g. Common-Automation's `ci-bash.yml`). There is no `push`
+# trigger: a PR to master already runs this gate before merge, so a
+# post-merge re-run on master would be redundant. A workflow's `on:`
+# triggers fire only in the repo that hosts the file, so the self-trigger
+# is invisible to consumers, who only ever reach it via `uses:`.
+#
+# Every `uses:` for a Common-DotNet composite is a local `./` path,
+# never a fully-qualified `@master` ref. The reason: GitHub Actions
+# eagerly resolves every registry-form `uses:` at job-prep time
+# before step-level `if:` guards are evaluated, so a PR that
+# introduces a brand new composite would fail prep before any step
+# could run. Local refs are resolved at step-execution time after
+# checkout has populated the workspace, so they side-step the
+# eager-resolution failure mode entirely.
+#
+# To make `./` work for external consumers (whose workspace does not
+# contain Common-DotNet's composites), the job does a conditional
+# sparse checkout of Common-DotNet at master into `.common-dotnet/`. The
+# self branch points at the consumer's own workspace, so PRs to this
+# repo exercise the PR's own composite code end-to-end.
+#
+# Dual runner support, split across two independent signals:
+#
+#   1. WHICH machine - `runs-on` precedence: the `runner` input override
+#      (a one-off, via workflow_dispatch or a consumer's `with:`), else
+#      the `CI_DOTNET_RUNNER` repo/org variable, else the self-hosted
+#      default. Both the input and the variable are JSON label arrays -
+#      `["ubuntu-latest"]` for a single label, or
+#      `["self-hosted","linux","gpu"]` for multi-label intersection.
+#      Public consumers (whose GitHub-hosted minutes are free, unlike
+#      private-repo minutes) set the variable to a hosted label; private
+#      repos leave it unset and stay self-hosted. Steady-state selection
+#      lives in repo/org settings - the input is just for overrides.
+#
+#   2. WHETHER to install the toolchain - the `provision-dotnet-toolchain`
+#      call is gated on `runner.environment` (github-hosted vs
+#      self-hosted), NOT on the label. This matters because a self-hosted
+#      *pool* is targeted by an arbitrary custom label that no label
+#      inspection could classify as hosted-or-not; the runtime
+#      environment is authoritative. So provisioning runs only on
+#      GitHub-hosted runners; self-hosted gets the toolchain baked in by
+#      Infrastructure-GitHubRunners. The composite itself is a pure
+#      installer - this WHETHER decision lives here in the orchestrator.
+
+on:
+  # Self-trigger for this repo's own PRs. Inputs are absent on this
+  # event (the `inputs` context is populated only for `workflow_call`),
+  # so every input must be empty-safe: `solution-path` falls back to
+  # auto-discovery, `dotnet-version` is coalesced at its use site, and
+  # `coverage-threshold` is defaulted inside its composite.
+  pull_request:
+    branches: [master]
+  # Manual runs let a maintainer override the runner for a one-off (e.g.
+  # force a hosted runner to reproduce a consumer's environment). This is
+  # the only override path for THIS repo's own runs, since pull_request
+  # cannot carry inputs.
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: >-
+          Optional runs-on override for this run, as a JSON label array
+          (e.g. `["ubuntu-latest"]` or `["self-hosted","gpu"]`). Takes
+          precedence over the CI_DOTNET_RUNNER variable.
+        required: false
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      runner:
+        description: >-
+          Optional runs-on override, as a JSON label array (e.g.
+          `["ubuntu-latest"]`). Takes precedence over the
+          CI_DOTNET_RUNNER variable; consumers pass it in `with:` to
+          override per-call. Leave empty to use the variable.
+        required: false
+        type: string
+        default: ''
+      solution-path:
+        description: >-
+          Path to the .sln (or .slnx) file to restore and build,
+          relative to the consumer repo root. Optional: when omitted,
+          the `resolve-solution-path` step auto-discovers a single
+          solution file in the repo and fails if there are zero or
+          more than one. Pass it explicitly to disambiguate a repo
+          with multiple solutions.
+        required: false
+        type: string
+        default: ''
+      dotnet-version:
+        description: >-
+          .NET SDK version to install when running on a GitHub-hosted
+          runner, in actions/setup-dotnet syntax (e.g. `10.0.x`). Unused
+          on self-hosted (the SDK is baked into the image). Defaulted so
+          consumers on a different target framework are not pinned to
+          this repo's TFM.
+        required: false
+        type: string
+        default: 10.0.x
+      coverage-threshold:
+        description: >-
+          Minimum acceptable line coverage as a percentage (0-100).
+          The job fails if the merged Cobertura report's line-rate
+          falls below this value. Default 90 mirrors the SynergyOps
+          house standard; raise or lower per-consumer when justified.
+        required: false
+        type: number
+        default: 90
+
+jobs:
+  build:
+    name: Build, test, and measure coverage
+    # Runner selection, highest precedence first: the `runner` input
+    # (a one-off override), else the `CI_DOTNET_RUNNER` variable, else
+    # any self-hosted runner. Each value is a JSON label array, e.g.
+    # ["ubuntu-latest"] or ["self-hosted","linux","gpu"]. This only picks
+    # the machine - whether the toolchain is installed is decided
+    # separately at runtime via `runner.environment`.
+    runs-on: ${{ inputs.runner != '' && fromJSON(inputs.runner)
+      || vars.CI_DOTNET_RUNNER != '' && fromJSON(vars.CI_DOTNET_RUNNER)
+      || fromJSON('["self-hosted"]') }}
+    # Declared so static analysis (actionlint) recognizes the context
+    # access below; the real value is set at runtime by the
+    # resolve-solution-path step via $GITHUB_ENV.
+    env:
+      SOLUTION_PATH: ''
+    steps:
+      - name: Check out consumer repo
+        uses: actions/checkout@v5
+
+      - name: Check out Common-DotNet action source
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: actions/checkout@v5
+        with:
+          repository: VitaliiAndreev/Common-DotNet
+          ref: master
+          path: .common-dotnet
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+
+      # Self-hosted only: this clears artifacts left in the persistent
+      # _work/ dir by a prior job. GitHub-hosted runners get a fresh VM
+      # per job, so there is nothing stale to wipe - skip the no-op.
+      - name: Clear workspace artifacts (self)
+        if: runner.environment == 'self-hosted' && github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/clear-workspace-artifacts
+
+      - name: Clear workspace artifacts (external)
+        if: runner.environment == 'self-hosted' && github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/clear-workspace-artifacts
+
+      # Resolve the solution once and publish it as $SOLUTION_PATH for
+      # every build/test step below. Runs after cleanup so a stale .sln
+      # under bin/obj cannot be discovered, and before restore (the
+      # first step that needs it). Only one of the pair runs - the
+      # other is skipped by its repository guard - and both write the
+      # same env var, so downstream steps read one canonical value.
+      - name: Resolve solution path (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/resolve-solution-path
+        with:
+          solution-path: ${{ inputs.solution-path }}
+
+      - name: Resolve solution path (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/resolve-solution-path
+        with:
+          solution-path: ${{ inputs.solution-path }}
+
+      # Install the SDK and ReportGenerator the hosted image lacks.
+      # Gated here, at the orchestrator, on `runner.environment`: only
+      # GitHub-hosted runners need it; self-hosted runners get the
+      # toolchain baked in by Infrastructure-GitHubRunners. Gating on the
+      # runtime environment rather than a runner label is deliberate - a
+      # self-hosted *pool* is targeted by an arbitrary custom label that
+      # no inspection could classify as hosted-or-not. Runs before the
+      # assert-* preflights so on the hosted path those asserts confirm
+      # the install rather than failing on a bare image. (The second
+      # guard is the repository self/external split, as on every step.)
+      - name: Provision .NET toolchain (self)
+        if: runner.environment == 'github-hosted' && github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/provision-dotnet-toolchain
+        with:
+          dotnet-version: ${{ inputs.dotnet-version || '10.0.x' }}
+
+      - name: Provision .NET toolchain (external)
+        if: runner.environment == 'github-hosted' && github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/provision-dotnet-toolchain
+        with:
+          dotnet-version: ${{ inputs.dotnet-version || '10.0.x' }}
+
+      - name: Assert .NET SDK present (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/assert-dotnet-sdk
+
+      - name: Assert .NET SDK present (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/assert-dotnet-sdk
+
+      # Grouped with the SDK assertion so every required tool is
+      # checked before any long-running step.
+      - name: Assert ReportGenerator present (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/assert-reportgenerator
+
+      - name: Assert ReportGenerator present (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/assert-reportgenerator
+
+      # Build/test steps read the resolved $SOLUTION_PATH, not the raw
+      # input, so auto-discovery and an explicit input share one path.
+      - name: Restore (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/dotnet-restore
+        with:
+          solution-path: ${{ env.SOLUTION_PATH }}
+
+      - name: Restore (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/dotnet-restore
+        with:
+          solution-path: ${{ env.SOLUTION_PATH }}
+
+      - name: Build (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/dotnet-build
+        with:
+          solution-path: ${{ env.SOLUTION_PATH }}
+
+      - name: Build (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/dotnet-build
+        with:
+          solution-path: ${{ env.SOLUTION_PATH }}
+
+      - name: Test with coverage (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/dotnet-test
+        with:
+          solution-path: ${{ env.SOLUTION_PATH }}
+
+      - name: Test with coverage (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/dotnet-test
+        with:
+          solution-path: ${{ env.SOLUTION_PATH }}
+
+      # Turns the raw Cobertura output from `dotnet-test` into a
+      # browsable HTML report plus a text summary and merged
+      # Cobertura. The merged Cobertura is the canonical input the
+      # threshold gate reads.
+      - name: Generate coverage report (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/dotnet-coverage-report
+
+      - name: Generate coverage report (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/dotnet-coverage-report
+
+      # Reads the merged Cobertura emitted by `dotnet-coverage-report`
+      # and fails the job when line coverage drops below the
+      # configured threshold. Placed before the artifact upload so
+      # the gate is the final word on the build, but the upload step
+      # uses `if: always()` so reviewers still get the report when
+      # the gate fails - that is exactly when they need it most.
+      - name: Enforce coverage threshold (self)
+        if: github.repository == 'VitaliiAndreev/Common-DotNet'
+        uses: ./.github/actions/assert-coverage-threshold
+        with:
+          coverage-threshold: ${{ inputs.coverage-threshold }}
+
+      - name: Enforce coverage threshold (external)
+        if: github.repository != 'VitaliiAndreev/Common-DotNet'
+        uses: ./.common-dotnet/.github/actions/assert-coverage-threshold
+        with:
+          coverage-threshold: ${{ inputs.coverage-threshold }}
+
+      # Single artifact carrying HTML, Summary.txt, and the merged
+      # Cobertura. Uploaded unconditionally on job completion (even
+      # on test failure) so reviewers can still inspect partial
+      # coverage for the assemblies whose tests did run.
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: CoverageReport/
+          if-no-files-found: error

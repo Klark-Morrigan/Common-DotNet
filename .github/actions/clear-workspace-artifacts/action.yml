@@ -1,0 +1,18 @@
+name: Clear workspace artifacts
+description: >
+  Removes bin/, obj/, TestResults/, CoverageReport/ left over from a
+  prior job on the same self-hosted runner. The runner's _work/
+  directory persists across jobs, so stale output from previous runs
+  can poison a later build (ghost assemblies, leftover coverage). This
+  action wipes them before any compile or measure step.
+
+runs:
+  using: composite
+  steps:
+    - name: Clear workspace artifacts
+      shell: pwsh
+      # ${{ github.action_path }} resolves to the runner-local copy of
+      # this action's directory. Invoking the colocated script via that
+      # path keeps action body + scripts SHA-pinned together.
+      run: |
+        & "${{ github.action_path }}/Clear-WorkspaceArtifacts.ps1"

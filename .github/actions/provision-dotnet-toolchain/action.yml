@@ -1,0 +1,35 @@
+name: Provision .NET toolchain
+description: >
+  Installs the .NET SDK and the ReportGenerator global tool that a
+  GitHub-hosted image does not carry. This action always installs when
+  invoked - deciding *whether* a given runner needs it is the caller's
+  job. The reusable workflow gates the call on `runner.environment` so
+  it runs only on GitHub-hosted runners, where Infrastructure-GitHubRunners
+  does not supply the toolchain. Placed before the assert-* preflights,
+  so those asserts verify a successful install rather than failing.
+
+inputs:
+  dotnet-version:
+    description: >
+      .NET SDK version to install, in actions/setup-dotnet syntax
+      (e.g. "10.0.x"). Surfaced as a workflow input so consumers on a
+      different target framework are not pinned to this repo's TFM.
+    required: false
+    default: '10.0.x'
+
+runs:
+  using: composite
+  steps:
+    # setup-dotnet is a registry action, not a colocated script, so it
+    # is referenced directly. It puts the SDK on PATH for this job.
+    - uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    # ReportGenerator install is delegated to a colocated script so the
+    # action body and its logic ship at the same SHA, matching every
+    # other composite in this repo.
+    - name: Install ReportGenerator
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Install-ReportGenerator.ps1"

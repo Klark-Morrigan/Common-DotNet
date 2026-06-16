@@ -1,0 +1,35 @@
+name: dotnet coverage report
+description: >
+  Generates a human-readable coverage report (HTML, text summary, and
+  a merged Cobertura file) from the Cobertura output produced by the
+  upstream `dotnet-test` step. Assumes ReportGenerator is on PATH;
+  pair with `assert-reportgenerator` earlier in the job for a clear
+  preflight failure. The merged `Cobertura.xml` written under the
+  target directory is the canonical input for the threshold gate
+  (Step 6) - it does not need to glob `TestResults/`.
+
+inputs:
+  reports-glob:
+    description: >
+      Glob for Cobertura input files. Defaults to
+      `TestResults/**/coverage.cobertura.xml` to match the path the
+      `dotnet-test` action writes to.
+    required: false
+    default: TestResults/**/coverage.cobertura.xml
+  target-dir:
+    description: >
+      Directory to write the report into. Defaults to `CoverageReport`,
+      which is the path the upload-artifact step and the threshold gate
+      expect.
+    required: false
+    default: CoverageReport
+
+runs:
+  using: composite
+  steps:
+    - name: Generate coverage report
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Invoke-CoverageReport.ps1" `
+          -ReportsGlob '${{ inputs.reports-glob }}' `
+          -TargetDir '${{ inputs.target-dir }}'

@@ -1,0 +1,17 @@
+name: Assert ReportGenerator is present
+description: >
+  Preflight that fails fast with an actionable message if the
+  ReportGenerator global tool is not on PATH. Without this, a missing
+  tool surfaces as a confusing "command not found" several steps later
+  inside the coverage-report step. ReportGenerator is provisioned by
+  Infrastructure-GitHubRunners (installed as a global `dotnet tool`);
+  the error message points there so the fix lands in the right repo,
+  not ad hoc on the runner host.
+
+runs:
+  using: composite
+  steps:
+    - name: Assert ReportGenerator
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/Assert-ReportGenerator.ps1"
