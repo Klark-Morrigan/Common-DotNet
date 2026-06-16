@@ -13,6 +13,8 @@ MSBuild props, analyzer rulesets, base test SDKs) that every SynergyOps
 - [Artifacts](#artifacts)
 - [Composite actions](#composite-actions)
 - [Self-test sample](#self-test-sample)
+- [Linting and local checks](#linting-and-local-checks)
+  - [Running the checks locally](#running-the-checks-locally)
 - [Branch protection](#branch-protection)
 - [Implementation docs](#implementation-docs)
 
@@ -318,6 +320,61 @@ Local validation:
 dotnet build tests/sample/Sample.sln
 dotnet test  tests/sample/Sample.sln
 ```
+
+## Linting and local checks
+
+Two delegating workflows lint this repo's YAML and bash surfaces on every
+pull request to `master`. Both forward to reusable workflows in
+`Common-Automation`, so the lint logic lives in one place and this repo
+carries only thin caller files. They sit alongside `ci-dotnet.yml`, which
+remains the .NET build/test/coverage gate:
+
+- [`.github/workflows/ci-yaml.yml`](.github/workflows/ci-yaml.yml) -
+  delegates to Common-Automation's reusable `ci-yaml.yml`, which runs
+  actionlint, action-validator, yamllint, and ansible-lint in parallel.
+  Each job auto-skips when its target surface is absent, so this repo's
+  workflows and composite-action YAML get linted at no extra cost.
+- [`.github/workflows/ci-bash.yml`](.github/workflows/ci-bash.yml) -
+  delegates to Common-Automation's reusable `ci-bash.yml`, which runs
+  shellcheck, the `check-sh-executable` +x-bit gate, and every `*.bats`
+  suite. This repo's only bash surface is the runner shims under
+  `scripts/`, held to the same strict bar as every other repo.
+
+These lint the YAML and bash surfaces only. The .NET sample tests are
+unaffected - they run via `dotnet test` (see
+[Self-test sample](#self-test-sample)), never through this lint tooling.
+
+### Running the checks locally
+
+Three sibling runner shims reproduce CI locally via Git Bash plus Docker, so
+failures surface before the PR rather than in CI. Each is a thin shim that
+points Common-Automation's engine at this repo via
+`COMMON_AUTOMATION_TARGET_REPO`, so `Common-Automation` must be a sibling
+checkout (`..\Common-Automation`). Every `.sh` has a `.bat` twin that is the
+Explorer double-click launcher for the same flow.
+
+- [`scripts/run-ci-yaml-and-bash.sh`](scripts/run-ci-yaml-and-bash.sh) (and its
+  [`.bat`](scripts/run-ci-yaml-and-bash.bat)) is the **main** local entry: it runs
+  the full lint suite **and** the bats tests, the local equivalent of this repo's
+  `ci-yaml.yml` + `ci-bash.yml`.
+- [`scripts/run-lint-yaml-and-bash.sh`](scripts/run-lint-yaml-and-bash.sh) (and its
+  [`.bat`](scripts/run-lint-yaml-and-bash.bat)) runs a single half - the lint suite
+  only (shellcheck, actionlint, action-validator, yamllint, ansible-lint).
+- [`scripts/run-tests-bash.sh`](scripts/run-tests-bash.sh) (and its
+  [`.bat`](scripts/run-tests-bash.bat)) runs the other half - the bats tests only.
+
+These runners are named for YAML/bash lint and bats, distinct from this repo's
+real .NET test path (`dotnet test` over the sample solution) - they never touch
+the .NET tests.
+
+Two supporting files keep the bash tooling CI-clean on a Windows checkout:
+
+- [`scripts/fix-permissions.sh`](scripts/fix-permissions.sh) (and its
+  [`.bat`](scripts/fix-permissions.bat) launcher) re-stages `+x` on every
+  tracked `*.sh` missing it, so the `check-sh-executable` gate stays green
+  after authoring a script on Windows (where new files land mode `0644`).
+- [`.gitattributes`](.gitattributes) pins `*.sh` to LF and `*.bat` to
+  CRLF, so a stray CR on a shebang line cannot break the Linux CI runners.
 
 ## Branch protection
 The self-triggered [`ci-dotnet.yml`](#ci-dotnetyml) run must be a
