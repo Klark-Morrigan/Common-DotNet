@@ -13,19 +13,53 @@
 #   workspace-relative path so downstream steps (ReportGenerator, the
 #   threshold gate) can find `TestResults/<guid>/coverage.cobertura.xml`
 #   without scanning the filesystem.
+#
+# Optional flags (both omitted unless the caller supplies them, so the
+# default behaviour is unchanged):
+# - RunSettingsPath -> `--settings`: lets a consumer apply coverage
+#   exclusions (e.g. framework-generated migrations) so the threshold
+#   gate measures only meaningful code. `dotnet test` does NOT
+#   auto-discover a .runsettings file, so it must be passed explicitly.
+# - TestFilter -> `--filter`: lets a consumer skip tests that cannot run
+#   on the CI runner (e.g. Docker-dependent integration tests).
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string] $SolutionPath
+    [string] $SolutionPath,
+
+    # Empty/whitespace means "no --settings flag".
+    [string] $RunSettingsPath = '',
+
+    # Empty/whitespace means "no --filter flag".
+    [string] $TestFilter = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
-& dotnet test $SolutionPath `
-    --no-build `
-    --collect:"XPlat Code Coverage" `
-    --results-directory ./TestResults
+# Build the argument list incrementally so an unsupplied optional flag
+# is absent entirely rather than passed as an empty string (which
+# `dotnet test` would reject).
+$dotnetArgs = @(
+    'test', $SolutionPath,
+    '--no-build',
+    '--collect:XPlat Code Coverage',
+    '--results-directory', './TestResults'
+)
+
+if (-not [string]::IsNullOrWhiteSpace($RunSettingsPath)) {
+    if (-not (Test-Path -LiteralPath $RunSettingsPath)) {
+        Write-Error "Provided runsettings-path '$RunSettingsPath' does not exist."
+        exit 1
+    }
+    $dotnetArgs += @('--settings', $RunSettingsPath)
+}
+
+if (-not [string]::IsNullOrWhiteSpace($TestFilter)) {
+    $dotnetArgs += @('--filter', $TestFilter)
+}
+
+& dotnet @dotnetArgs
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

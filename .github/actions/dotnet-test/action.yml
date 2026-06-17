@@ -16,6 +16,23 @@ inputs:
   solution-path:
     description: Path to the .sln/.slnx whose tests to run.
     required: true
+  runsettings-path:
+    description: >
+      Optional path to a .runsettings file passed to `dotnet test`
+      via `--settings`. Consumers use it to apply coverage exclusions
+      (e.g. framework-generated migrations, design-time factories) so
+      the threshold gate measures only meaningful code. Empty means no
+      `--settings` flag - the collector runs with its defaults.
+    required: false
+    default: ''
+  test-filter:
+    description: >
+      Optional expression passed to `dotnet test` via `--filter` to
+      select or exclude tests (e.g. skip Docker-dependent integration
+      tests on a runner without a daemon). Empty means no `--filter`
+      flag - every discovered test runs.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -24,4 +41,6 @@ runs:
       shell: pwsh
       run: |
         & "${{ github.action_path }}/Invoke-DotnetTest.ps1" `
-          -SolutionPath '${{ inputs.solution-path }}'
+          -SolutionPath '${{ inputs.solution-path }}' `
+          -RunSettingsPath '${{ inputs.runsettings-path }}' `
+          -TestFilter '${{ inputs.test-filter }}'
