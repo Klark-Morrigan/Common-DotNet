@@ -101,6 +101,27 @@ on:
         required: false
         type: string
         default: ''
+      runsettings-path:
+        description: >-
+          Optional path to a .runsettings file (relative to the
+          consumer repo root) passed to `dotnet test` via `--settings`.
+          Consumers use it to apply coverage exclusions - e.g.
+          framework-generated migrations or design-time factories - so
+          the threshold gate measures only meaningful code. `dotnet
+          test` does not auto-discover a .runsettings file, so it must
+          be named here. Empty means the collector runs with defaults.
+        required: false
+        type: string
+        default: ''
+      test-filter:
+        description: >-
+          Optional expression passed to `dotnet test` via `--filter` to
+          select or exclude tests - e.g. skip Docker-dependent
+          integration tests on a runner without a daemon. Empty means
+          every discovered test runs.
+        required: false
+        type: string
+        default: ''
       dotnet-version:
         description: >-
           .NET SDK version to install when running on a GitHub-hosted
@@ -252,12 +273,16 @@ jobs:
         uses: ./.github/actions/dotnet-test
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
+          runsettings-path: ${{ inputs.runsettings-path }}
+          test-filter: ${{ inputs.test-filter }}
 
       - name: Test with coverage (external)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-test
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
+          runsettings-path: ${{ inputs.runsettings-path }}
+          test-filter: ${{ inputs.test-filter }}
 
       # Turns the raw Cobertura output from `dotnet-test` into a
       # browsable HTML report plus a text summary and merged
