@@ -1,4 +1,4 @@
-name: CI (.NET)
+name: ci-dotnet
 
 # Reusable .NET CI workflow for SynergyOps repositories.
 #
