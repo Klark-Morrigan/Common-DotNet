@@ -49,17 +49,12 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 common_dotnet_root="$(cd "${script_dir}/.." && pwd)"
 repo_root="${COMMON_DOTNET_TARGET_REPO:-${common_dotnet_root}}"
 
-# Reuse Common-Automation's hold-window pause so an Explorer
-# double-click does not flash the window shut before the result is
-# read - the same UX the bash/yaml runners give. Sourced only when the
-# sibling checkout is present so a missing Common-Automation degrades to
-# "no pause" rather than a hard failure.
-common_automation_hold="${common_dotnet_root}/../Common-Automation/scripts/_hold-window.sh"
-if [[ -f "${common_automation_hold}" ]]; then
-    # shellcheck source=/dev/null
-    source "${common_automation_hold}"
-    trap hold_window_open EXIT
-fi
+# Reuse Common-Automation's hold-window pause so an Explorer double-click
+# does not flash the window shut before the result is read. The imports/
+# adapter owns the cross-repo resolution, the EXIT trap, and the soft-
+# dependency guard (a missing Common-Automation degrades to "no pause").
+# shellcheck source=scripts/imports/_hold-window.sh
+source "${script_dir}/imports/_hold-window.sh"
 
 # Preflight the two external tools the report/gate stages need, before
 # the long build, so a missing tool fails fast with an actionable

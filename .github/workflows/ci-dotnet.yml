@@ -1,4 +1,4 @@
-name: CI (.NET)
+name: ci-dotnet
 
 # Reusable .NET CI workflow for SynergyOps repositories.
 #
@@ -64,7 +64,6 @@ on:
   # auto-discovery, `dotnet-version` is coalesced at its use site, and
   # `coverage-threshold` is defaulted inside its composite.
   pull_request:
-    branches: [master]
   # Manual runs let a maintainer override the runner for a one-off (e.g.
   # force a hosted runner to reproduce a consumer's environment). This is
   # the only override path for THIS repo's own runs, since pull_request
@@ -180,7 +179,7 @@ jobs:
         if: runner.environment == 'self-hosted' && github.repository == 'Klark-Morrigan/Common-DotNet'
         uses: ./.github/actions/clear-workspace-artifacts
 
-      - name: Clear workspace artifacts (external)
+      - name: Clear workspace artifacts (consumer)
         if: runner.environment == 'self-hosted' && github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/clear-workspace-artifacts
 
@@ -196,7 +195,7 @@ jobs:
         with:
           solution-path: ${{ inputs.solution-path }}
 
-      - name: Resolve solution path (external)
+      - name: Resolve solution path (consumer)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/resolve-solution-path
         with:
@@ -218,7 +217,7 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnet-version || '10.0.x' }}
 
-      - name: Provision .NET toolchain (external)
+      - name: Provision .NET toolchain (consumer)
         if: runner.environment == 'github-hosted' && github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/provision-dotnet-toolchain
         with:
@@ -228,7 +227,7 @@ jobs:
         if: github.repository == 'Klark-Morrigan/Common-DotNet'
         uses: ./.github/actions/assert-dotnet-sdk
 
-      - name: Assert .NET SDK present (external)
+      - name: Assert .NET SDK present (consumer)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/assert-dotnet-sdk
 
@@ -238,7 +237,7 @@ jobs:
         if: github.repository == 'Klark-Morrigan/Common-DotNet'
         uses: ./.github/actions/assert-reportgenerator
 
-      - name: Assert ReportGenerator present (external)
+      - name: Assert ReportGenerator present (consumer)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/assert-reportgenerator
 
@@ -250,7 +249,7 @@ jobs:
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
 
-      - name: Restore (external)
+      - name: Restore (consumer)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-restore
         with:
@@ -262,7 +261,7 @@ jobs:
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
 
-      - name: Build (external)
+      - name: Build (consumer)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-build
         with:
@@ -276,7 +275,7 @@ jobs:
           runsettings-path: ${{ inputs.runsettings-path }}
           test-filter: ${{ inputs.test-filter }}
 
-      - name: Test with coverage (external)
+      - name: Test with coverage (consumer)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-test
         with:
@@ -292,7 +291,7 @@ jobs:
         if: github.repository == 'Klark-Morrigan/Common-DotNet'
         uses: ./.github/actions/dotnet-coverage-report
 
-      - name: Generate coverage report (external)
+      - name: Generate coverage report (consumer)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/dotnet-coverage-report
 
@@ -308,7 +307,7 @@ jobs:
         with:
           coverage-threshold: ${{ inputs.coverage-threshold }}
 
-      - name: Enforce coverage threshold (external)
+      - name: Enforce coverage threshold (consumer)
         if: github.repository != 'Klark-Morrigan/Common-DotNet'
         uses: ./.common-dotnet/.github/actions/assert-coverage-threshold
         with:

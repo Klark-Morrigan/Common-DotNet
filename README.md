@@ -389,7 +389,7 @@ manually once in the repository settings:
    job (named **`Build, test, and measure coverage`**) of
    `ci-dotnet.yml`. GitHub renders this as either
    `Build, test, and measure coverage` or
-   `CI (.NET) / Build, test, and measure coverage` depending on org
+   `ci-dotnet / Build, test, and measure coverage` depending on org
    settings - open a recent run's **Checks** tab and copy the exact
    string shown, then point the rule at it. If the workflow or job
    `name:` changes, the rule must be re-pointed - GitHub does not
