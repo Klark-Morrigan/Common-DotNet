@@ -64,7 +64,6 @@ on:
   # auto-discovery, `dotnet-version` is coalesced at its use site, and
   # `coverage-threshold` is defaulted inside its composite.
   pull_request:
-    branches: [master]
   # Manual runs let a maintainer override the runner for a one-off (e.g.
   # force a hosted runner to reproduce a consumer's environment). This is
   # the only override path for THIS repo's own runs, since pull_request
