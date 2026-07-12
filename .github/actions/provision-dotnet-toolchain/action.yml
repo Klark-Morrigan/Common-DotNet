@@ -4,9 +4,10 @@ description: >
   GitHub-hosted image does not carry. This action always installs when
   invoked - deciding *whether* a given runner needs it is the caller's
   job. The reusable workflow gates the call on `runner.environment` so
-  it runs only on GitHub-hosted runners, where Infrastructure-GitHubRunners
-  does not supply the toolchain. Placed before the assert-* preflights,
-  so those asserts verify a successful install rather than failing.
+  it runs only on GitHub-hosted runners; self-hosted runners are expected
+  to carry the toolchain pre-baked in the image. Placed before the
+  assert-* preflights, so those asserts verify a successful install
+  rather than failing.
 
 inputs:
   dotnet-version:

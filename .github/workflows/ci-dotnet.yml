@@ -53,9 +53,11 @@ name: ci-dotnet
 #      *pool* is targeted by an arbitrary custom label that no label
 #      inspection could classify as hosted-or-not; the runtime
 #      environment is authoritative. So provisioning runs only on
-#      GitHub-hosted runners; self-hosted gets the toolchain baked in by
-#      Infrastructure-GitHubRunners. The composite itself is a pure
-#      installer - this WHETHER decision lives here in the orchestrator.
+#      GitHub-hosted runners; a self-hosted runner is expected to carry
+#      the toolchain pre-baked in its image (how the pool is provisioned
+#      is the runner operator's concern, external to this workflow). The
+#      composite itself is a pure installer - this WHETHER decision lives
+#      here in the orchestrator.
 
 on:
   # Self-trigger for this repo's own PRs. Inputs are absent on this
@@ -203,9 +205,10 @@ jobs:
 
       # Install the SDK and ReportGenerator the hosted image lacks.
       # Gated here, at the orchestrator, on `runner.environment`: only
-      # GitHub-hosted runners need it; self-hosted runners get the
-      # toolchain baked in by Infrastructure-GitHubRunners. Gating on the
-      # runtime environment rather than a runner label is deliberate - a
+      # GitHub-hosted runners need it; a self-hosted runner is expected to
+      # carry the toolchain pre-baked in its image (external to this
+      # workflow). Gating on the runtime environment rather than a runner
+      # label is deliberate - a
       # self-hosted *pool* is targeted by an arbitrary custom label that
       # no inspection could classify as hosted-or-not. Runs before the
       # assert-* preflights so on the hosted path those asserts confirm

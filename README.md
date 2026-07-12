@@ -120,19 +120,20 @@ than a remote ref - see [Why two checkouts](#why-two-checkouts).
    ReportGenerator global tool, which a GitHub-hosted image does not
    carry. The workflow gates this call on `runner.environment`, so it
    runs **only on GitHub-hosted runners** and is skipped on self-hosted,
-   where the toolchain is baked in by `Infrastructure-GitHubRunners`.
-   Gating on the runtime environment rather than a runner label is
+   where the runner image is expected to carry the toolchain pre-baked
+   (external to this workflow). Gating on the runtime environment rather
+   than a runner label is
    deliberate - a self-hosted pool is targeted by an arbitrary custom
    label that no inspection could classify. Runs before the asserts so
    on the hosted path they confirm the install rather than failing on a
    bare image.
 6. [`assert-dotnet-sdk`](.github/actions/assert-dotnet-sdk/) - runs
-   `dotnet --version` and fails fast with a message pointing at
-   `Infrastructure-GitHubRunners` if the SDK is missing, instead of
-   letting `dotnet restore` produce a confusing error mid-job.
+   `dotnet --version` and fails fast with a message pointing at the
+   runner image if the SDK is missing, instead of letting `dotnet
+   restore` produce a confusing error mid-job.
 7. [`assert-reportgenerator`](.github/actions/assert-reportgenerator/) -
    verifies the ReportGenerator global tool is on PATH and fails fast
-   with the same `Infrastructure-GitHubRunners` guidance if missing.
+   with the same runner-image guidance if missing.
    Grouped with the SDK assertion so every required tool is checked
    before any long-running step.
 8. [`dotnet-restore`](.github/actions/dotnet-restore/) - `dotnet
@@ -223,8 +224,9 @@ depending on where the job lands, decided at runtime by
 `self-hosted`), not by the runner label:
 - **Self-hosted:** the .NET SDK *and* the ReportGenerator global tool
   (`dotnet tool install -g dotnet-reportgenerator-globaltool`) are
-  provisioned by `Infrastructure-GitHubRunners` and baked into the
-  runner image. Consumers do not install either ad hoc, and the workflow
+  expected to be pre-baked into the runner image (how the pool is
+  provisioned is the runner operator's concern, external to this
+  workflow). Consumers do not install either ad hoc, and the workflow
   skips the
   [`provision-dotnet-toolchain`](.github/actions/provision-dotnet-toolchain/)
   call.
